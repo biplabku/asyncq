@@ -1,4 +1,4 @@
-use jobqueuesmith::{backends::InMemoryBackend, Job, JobContext, JobError, JobResult, Perform, Queue, Worker};
+use asyncq::{backends::InMemoryBackend, Job, JobContext, JobError, JobResult, Perform, Queue, Worker};
 use serde::{Deserialize, Serialize};
 use std::sync::{Arc, Mutex};
 

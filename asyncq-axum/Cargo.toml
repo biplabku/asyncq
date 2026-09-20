@@ -1,5 +1,5 @@
 [package]
-name = "jobqueuesmith-axum"
+name = "asyncq-axum"
 description = "Axum integration for jobqueuesmith — admin router with Prometheus metrics and DLQ management"
 keywords = ["jobs", "queue", "axum", "admin", "background"]
 categories = ["asynchronous", "web-programming"]
@@ -10,7 +10,7 @@ license.workspace = true
 repository.workspace = true
 
 [dependencies]
-jobqueuesmith.workspace = true
+asyncq.workspace = true
 tokio.workspace = true
 serde.workspace = true
 serde_json.workspace = true

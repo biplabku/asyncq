@@ -1,10 +1,10 @@
 [workspace]
 members = [
-    "jobqueuesmith",
-    "jobqueuesmith-derive",
-    "jobqueuesmith-redis",
-    "jobqueuesmith-postgres",
-    "jobqueuesmith-axum",
+    "asyncq",
+    "asyncq-derive",
+    "asyncq-redis",
+    "asyncq-postgres",
+    "asyncq-axum",
 ]
 resolver = "2"
 
@@ -13,7 +13,7 @@ version = "0.1.0"
 edition = "2021"
 authors = ["Biplab Das <dasbiplabtu@gmail.com>"]
 license = "MIT OR Apache-2.0"
-repository = "https://github.com/biplabku/jobqueuesmith"
+repository = "https://github.com/biplabku/asyncq"
 rust-version = "1.75"
 
 [workspace.dependencies]
@@ -41,5 +41,5 @@ async-trait = "0.1"
 tracing = "0.1"
 
 # Internal crates
-jobqueuesmith = { path = "jobqueuesmith", version = "0.1.0" }
-jobqueuesmith-derive = { path = "jobqueuesmith-derive", version = "0.1.0" }
+asyncq = { path = "asyncq", version = "0.1.0" }
+asyncq-derive = { path = "asyncq-derive", version = "0.1.0" }

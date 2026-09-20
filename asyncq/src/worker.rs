@@ -19,7 +19,7 @@ const DEFAULT_STUCK_TIMEOUT: Duration = Duration::from_secs(120);
 /// # Quick start
 ///
 /// ```rust,no_run
-/// # use jobqueuesmith::{Worker, Queue, Job, Perform, JobContext, JobResult, backends::InMemoryBackend};
+/// # use asyncq::{Worker, Queue, Job, Perform, JobContext, JobResult, backends::InMemoryBackend};
 /// # use serde::{Serialize, Deserialize};
 /// # #[derive(Job, Serialize, Deserialize)]
 /// # #[job(queue = "jobs", retries = 1)]
@@ -64,7 +64,7 @@ impl<B: Backend> Worker<B> {
     /// Register a job type. The worker will call `J::perform` when it claims a job of type `J`.
     ///
     /// ```rust,no_run
-    /// # use jobqueuesmith::{Worker, Queue, Job, Perform, JobContext, JobResult, backends::InMemoryBackend};
+    /// # use asyncq::{Worker, Queue, Job, Perform, JobContext, JobResult, backends::InMemoryBackend};
     /// # use serde::{Serialize, Deserialize};
     /// # #[derive(Job, Serialize, Deserialize)]
     /// # #[job(queue = "emails", retries = 1)]
@@ -169,7 +169,7 @@ impl<B: Backend> Worker<B> {
     /// Designed for tests — no need to `Ctrl+C` to stop.
     ///
     /// ```rust,no_run
-    /// # use jobqueuesmith::{Worker, Queue, Job, Perform, JobContext, JobResult, backends::InMemoryBackend};
+    /// # use asyncq::{Worker, Queue, Job, Perform, JobContext, JobResult, backends::InMemoryBackend};
     /// # use serde::{Serialize, Deserialize};
     /// # #[derive(Job, Serialize, Deserialize)]
     /// # #[job(queue = "jobs", retries = 1)]

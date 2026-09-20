@@ -1,7 +1,7 @@
 [package]
-name = "jobqueuesmith"
-description = "Background job processing for Rust — derive macro API, Redis/PostgreSQL backends, built-in testing support"
-keywords = ["jobs", "queue", "background", "worker", "async"]
+name = "asyncq"
+description = "Async background job processing for Rust — #[derive(Job)] API, Redis/PostgreSQL backends, Sidekiq/Celery-style worker"
+keywords = ["jobs", "queue", "sidekiq", "worker", "background"]
 categories = ["asynchronous", "web-programming", "database"]
 readme = "../README.md"
 version.workspace = true
@@ -21,7 +21,7 @@ uuid.workspace = true
 thiserror.workspace = true
 async-trait.workspace = true
 tracing.workspace = true
-jobqueuesmith-derive.workspace = true
+asyncq-derive.workspace = true
 
 [dev-dependencies]
 tokio = { version = "1", features = ["full"] }

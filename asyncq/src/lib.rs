@@ -3,8 +3,8 @@
 //! # Quick start
 //!
 //! ```rust,no_run
-//! use jobqueuesmith::{Job, Perform, JobContext, JobResult, Queue, Worker};
-//! use jobqueuesmith::backends::InMemoryBackend;
+//! use asyncq::{Job, Perform, JobContext, JobResult, Queue, Worker};
+//! use asyncq::backends::InMemoryBackend;
 //! use serde::{Serialize, Deserialize};
 //!
 //! // 1. Define your job payload and metadata
@@ -45,7 +45,7 @@
 //! infrastructure-free tests:
 //!
 //! ```rust,no_run
-//! use jobqueuesmith::{Queue, Worker, backends::InMemoryBackend};
+//! use asyncq::{Queue, Worker, backends::InMemoryBackend};
 //!
 //! #[tokio::test]
 //! async fn test_my_job() {
@@ -96,5 +96,5 @@ pub use job::{Job, JobId, JobRecord, Perform, QueueStats};
 pub use queue::Queue;
 pub use worker::Worker;
 
-// Re-export the derive macro so users only need `use jobqueuesmith::Job`
-pub use jobqueuesmith_derive::Job;
+// Re-export the derive macro so users only need `use asyncq::Job`
+pub use asyncq_derive::Job;

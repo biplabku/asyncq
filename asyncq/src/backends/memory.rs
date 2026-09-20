@@ -28,8 +28,8 @@ struct QueueState {
 /// # Example
 ///
 /// ```rust,no_run
-/// use jobqueuesmith::{Queue, Worker, Job, Perform, JobContext, JobResult};
-/// use jobqueuesmith::backends::InMemoryBackend;
+/// use asyncq::{Queue, Worker, Job, Perform, JobContext, JobResult};
+/// use asyncq::backends::InMemoryBackend;
 /// use serde::{Serialize, Deserialize};
 ///
 /// #[derive(Job, Serialize, Deserialize)]
@@ -74,7 +74,7 @@ impl InMemoryBackend {
     /// exponential backoff) are immediately claimable by `run_once()`.
     ///
     /// ```rust,no_run
-    /// # use jobqueuesmith::backends::InMemoryBackend;
+    /// # use asyncq::backends::InMemoryBackend;
     /// let backend = InMemoryBackend::new().with_immediate_retries();
     /// ```
     pub fn with_immediate_retries(mut self) -> Self {

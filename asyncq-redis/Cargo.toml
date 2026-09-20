@@ -1,5 +1,5 @@
 [package]
-name = "jobqueuesmith-redis"
+name = "asyncq-redis"
 description = "Redis backend for jobqueuesmith"
 keywords = ["jobs", "queue", "redis", "background", "worker"]
 categories = ["asynchronous", "web-programming", "database"]
@@ -10,7 +10,7 @@ license.workspace = true
 repository.workspace = true
 
 [dependencies]
-jobqueuesmith.workspace = true
+asyncq.workspace = true
 tokio.workspace = true
 serde.workspace = true
 serde_json.workspace = true

@@ -17,7 +17,7 @@ use crate::{
 /// # Quick start
 ///
 /// ```rust,no_run
-/// use jobqueuesmith::{Queue, backends::InMemoryBackend};
+/// use asyncq::{Queue, backends::InMemoryBackend};
 ///
 /// let backend = InMemoryBackend::new();
 /// let queue = Queue::new(backend);
@@ -26,7 +26,7 @@ use crate::{
 /// # With shared state (database pool, config, etc.)
 ///
 /// ```rust,no_run
-/// # use jobqueuesmith::{Queue, backends::InMemoryBackend};
+/// # use asyncq::{Queue, backends::InMemoryBackend};
 /// # use std::sync::Arc;
 /// # let my_db_pool = 42u32;
 /// let queue = Queue::new(InMemoryBackend::new())
@@ -52,7 +52,7 @@ impl<B: Backend> Queue<B> {
     /// Jobs retrieve state with `ctx.state::<T>()`.
     ///
     /// ```rust,no_run
-    /// # use jobqueuesmith::{Queue, backends::InMemoryBackend};
+    /// # use asyncq::{Queue, backends::InMemoryBackend};
     /// # use std::sync::Arc;
     /// # let db_pool = 42u32;
     /// let queue = Queue::new(InMemoryBackend::new())
@@ -68,7 +68,7 @@ impl<B: Backend> Queue<B> {
     /// Enqueue a job for immediate processing.
     ///
     /// ```rust,no_run
-    /// # use jobqueuesmith::{Queue, backends::InMemoryBackend, Job, Perform, JobContext, JobResult};
+    /// # use asyncq::{Queue, backends::InMemoryBackend, Job, Perform, JobContext, JobResult};
     /// # use serde::{Serialize, Deserialize};
     /// # #[derive(Job, Serialize, Deserialize)]
     /// # #[job(queue = "emails", retries = 3)]
@@ -90,7 +90,7 @@ impl<B: Backend> Queue<B> {
     /// Enqueue a job to run after `delay`.
     ///
     /// ```rust,no_run
-    /// # use jobqueuesmith::{Queue, backends::InMemoryBackend, Job, Perform, JobContext, JobResult};
+    /// # use asyncq::{Queue, backends::InMemoryBackend, Job, Perform, JobContext, JobResult};
     /// # use serde::{Serialize, Deserialize};
     /// # use std::time::Duration;
     /// # #[derive(Job, Serialize, Deserialize)]

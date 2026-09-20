@@ -88,7 +88,7 @@ fn expand(input: JobInput) -> proc_macro2::TokenStream {
 
     quote! {
         #[automatically_derived]
-        impl #impl_generics ::jobqueuesmith::Job for #ident #ty_generics #where_clause {
+        impl #impl_generics ::asyncq::Job for #ident #ty_generics #where_clause {
             const KIND:         &'static str       = #kind_str;
             const QUEUE:        &'static str       = #queue;
             const MAX_RETRIES:  u32                = #retries;
