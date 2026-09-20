@@ -1,0 +1,28 @@
+[package]
+name = "jobqueuesmith"
+description = "Background job processing for Rust — derive macro API, Redis/PostgreSQL backends, built-in testing support"
+keywords = ["jobs", "queue", "background", "worker", "async"]
+categories = ["asynchronous", "web-programming", "database"]
+readme = "../README.md"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+tokio.workspace = true
+futures.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+chrono.workspace = true
+uuid.workspace = true
+thiserror.workspace = true
+async-trait.workspace = true
+tracing.workspace = true
+jobqueuesmith-derive.workspace = true
+
+[dev-dependencies]
+tokio = { version = "1", features = ["full"] }
+tracing-subscriber = "0.3"

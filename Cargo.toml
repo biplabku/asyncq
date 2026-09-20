@@ -1,0 +1,45 @@
+[workspace]
+members = [
+    "jobqueuesmith",
+    "jobqueuesmith-derive",
+    "jobqueuesmith-redis",
+    "jobqueuesmith-postgres",
+    "jobqueuesmith-axum",
+]
+resolver = "2"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+authors = ["Biplab Das <dasbiplabtu@gmail.com>"]
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/biplabku/jobqueuesmith"
+rust-version = "1.75"
+
+[workspace.dependencies]
+# Core async runtime
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time"] }
+futures = "0.3"
+
+# Serialization
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# Time
+chrono = { version = "0.4", features = ["serde"] }
+
+# IDs
+uuid = { version = "1", features = ["v4", "serde"] }
+
+# Errors
+thiserror = "2"
+
+# Async traits
+async-trait = "0.1"
+
+# Tracing
+tracing = "0.1"
+
+# Internal crates
+jobqueuesmith = { path = "jobqueuesmith", version = "0.1.0" }
+jobqueuesmith-derive = { path = "jobqueuesmith-derive", version = "0.1.0" }

@@ -1,0 +1,22 @@
+[package]
+name = "jobqueuesmith-axum"
+description = "Axum integration for jobqueuesmith — admin router with Prometheus metrics and DLQ management"
+keywords = ["jobs", "queue", "axum", "admin", "background"]
+categories = ["asynchronous", "web-programming"]
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+jobqueuesmith.workspace = true
+tokio.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+chrono.workspace = true
+uuid.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+axum = { version = "0.7", default-features = false }
+http = "1"

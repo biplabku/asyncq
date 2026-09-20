@@ -1,0 +1,19 @@
+[package]
+name = "jobqueuesmith-derive"
+description = "Derive macro for jobqueuesmith — #[derive(Job)] registers your struct as a background job"
+keywords = ["jobs", "queue", "derive", "macro", "background"]
+categories = ["asynchronous", "web-programming"]
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lib]
+proc-macro = true
+
+[dependencies]
+syn = { version = "2", features = ["full"] }
+quote = "1"
+proc-macro2 = "1"
+darling = "0.20"
