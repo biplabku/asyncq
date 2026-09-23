@@ -3,6 +3,7 @@ name = "asyncq-derive"
 description = "Derive macro for jobqueuesmith — #[derive(Job)] registers your struct as a background job"
 keywords = ["jobs", "queue", "derive", "macro", "background"]
 categories = ["asynchronous", "web-programming"]
+readme = "../README.md"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true

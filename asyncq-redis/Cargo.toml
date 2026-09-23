@@ -3,6 +3,7 @@ name = "asyncq-redis"
 description = "Redis backend for asyncq — production-grade async job queue for Rust"
 keywords = ["jobs", "queue", "redis", "background", "worker"]
 categories = ["asynchronous", "web-programming", "database"]
+readme = "../README.md"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true
