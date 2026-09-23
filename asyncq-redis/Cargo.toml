@@ -24,3 +24,13 @@ redis = { version = "0.27", features = ["tokio-comp", "connection-manager"] }
 [dev-dependencies]
 tokio = { version = "1", features = ["full"] }
 tracing-subscriber = "0.3"
+serde_json = "1"
+futures.workspace = true
+
+[[example]]
+name = "basic"
+path = "examples/basic.rs"
+
+[[example]]
+name = "with_state"
+path = "examples/with_state.rs"
