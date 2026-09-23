@@ -92,7 +92,7 @@ pub use backend::Backend;
 pub use backends::InMemoryBackend;
 pub use context::JobContext;
 pub use error::{Error, JobError, JobResult, Result};
-pub use job::{Job, JobId, JobRecord, Perform, QueueStats};
+pub use job::{Job, JobId, JobRecord, JobRecord as RawJobRecord, Perform, QueueStats};
 pub use queue::Queue;
 pub use worker::Worker;
 

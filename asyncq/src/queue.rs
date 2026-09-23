@@ -119,6 +119,14 @@ impl<B: Backend> Queue<B> {
         self.backend.enqueue(record).await
     }
 
+    /// Enqueue a raw [`JobRecord`] directly.
+    ///
+    /// Useful for testing backends without going through the typed `Perform`
+    /// API, or for advanced use cases where you construct the record manually.
+    pub async fn enqueue_record(&self, record: crate::job::JobRecord) -> Result<JobId> {
+        self.backend.enqueue(record).await
+    }
+
     // ── Observability ─────────────────────────────────────────────────────────
 
     /// Queue statistics: pending, running, completed, failed, dead counts.
