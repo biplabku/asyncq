@@ -9,11 +9,12 @@ members = [
 resolver = "2"
 
 [workspace.package]
-version = "0.1.3"
+version = "0.1.4"
 edition = "2021"
 authors = ["Biplab Das <dasbiplabtu@gmail.com>"]
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/biplabku/asyncq"
+documentation = "https://docs.rs/asyncq"
 rust-version = "1.75"
 
 [workspace.dependencies]
@@ -41,5 +42,5 @@ async-trait = "0.1"
 tracing = "0.1"
 
 # Internal crates
-asyncq = { path = "asyncq", version = "0.1.0" }
-asyncq-derive = { path = "asyncq-derive", version = "0.1.0" }
+asyncq = { path = "asyncq", version = "0.1.4" }
+asyncq-derive = { path = "asyncq-derive", version = "0.1.4" }

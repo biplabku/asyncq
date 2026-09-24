@@ -60,5 +60,5 @@ impl From<&str> for JobError {
     fn from(s: &str) -> Self { Self::Retry(s.to_owned()) }
 }
 
-/// The return type of [`Perform::perform`].
+/// The return type of [`crate::Perform::perform`].
 pub type JobResult = std::result::Result<(), JobError>;

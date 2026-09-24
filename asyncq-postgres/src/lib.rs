@@ -32,23 +32,34 @@
 //! # Transactional outbox
 //!
 //! PostgreSQL enables the transactional outbox pattern natively: enqueue a job
-//! in the same transaction as your business logic.
+//! in the same transaction as your business logic. The job only becomes visible
+//! to workers after `tx.commit()` — if the transaction rolls back, the job
+//! disappears with it.
 //!
 //! ```rust,ignore
-//! # use asyncq::{Queue, JobRecord};
-//! # use asyncq_postgres::PostgresBackend;
-//! # async fn example(queue: Queue<PostgresBackend>, pool: sqlx::PgPool) -> anyhow::Result<()> {
-//! let mut tx = pool.begin().await?;
-//! sqlx::query!("INSERT INTO orders ...").execute(&mut *tx).await?;
-//! // Job is enqueued in the same transaction — rolls back if the business logic fails
-//! queue.enqueue_in_tx(
-//!     "order.created",
-//!     serde_json::json!({"order_id": 1}),
-//!     &mut tx,
-//! ).await?;
-//! tx.commit().await?;
-//! # Ok(())
-//! # }
+//! use asyncq_postgres::PostgresBackend;
+//! use chrono::Utc;
+//! use serde_json::json;
+//!
+//! async fn create_order(backend: &PostgresBackend, pool: &sqlx::PgPool) -> anyhow::Result<()> {
+//!     let mut tx = pool.begin().await?;
+//!
+//!     sqlx::query("INSERT INTO orders (status) VALUES ('pending')")
+//!         .execute(&mut *tx).await?;
+//!
+//!     // Enqueue in the same transaction
+//!     backend.enqueue_in_tx(
+//!         "order.created",          // job kind — must match a registered Job type
+//!         "orders",                 // queue name
+//!         serde_json::to_vec(&json!({"order_id": 1}))?,
+//!         3,                        // max_attempts
+//!         Utc::now(),               // scheduled_at (now = run immediately)
+//!         &mut tx,
+//!     ).await?;
+//!
+//!     tx.commit().await?;           // job visible to workers only after this
+//!     Ok(())
+//! }
 //! ```
 
 use std::time::Duration;

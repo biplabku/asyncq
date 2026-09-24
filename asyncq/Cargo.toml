@@ -9,6 +9,7 @@ edition.workspace = true
 authors.workspace = true
 license.workspace = true
 repository.workspace = true
+documentation.workspace = true
 rust-version.workspace = true
 
 [dependencies]

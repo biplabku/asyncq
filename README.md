@@ -184,6 +184,49 @@ let stats = queue.stats("emails").await?;
 println!("pending={} running={} dead={}", stats.pending, stats.running, stats.dead);
 ```
 
+## PostgreSQL backend (asyncq-postgres)
+
+Use PostgreSQL as the job store — no Redis required. Supports the transactional outbox pattern.
+
+```toml
+[dependencies]
+asyncq-postgres = "0.1"
+```
+
+```rust
+use asyncq::{Queue, Worker};
+use asyncq_postgres::PostgresBackend;
+
+let backend = PostgresBackend::new("postgres://user:pass@localhost/mydb").await?;
+backend.migrate().await?;  // creates asyncq_jobs table — safe to call on every startup
+
+let queue = Queue::new(backend.clone());
+queue.enqueue(SendEmail { to: "user@example.com".into() }).await?;
+Worker::new(queue).register::<SendEmail>().run().await;
+```
+
+### Transactional outbox
+
+Enqueue a job inside the same DB transaction as your business logic. The job is only visible to workers after `tx.commit()`.
+
+```rust
+use chrono::Utc;
+
+let mut tx = pool.begin().await?;
+sqlx::query("INSERT INTO orders (status) VALUES ('pending')").execute(&mut *tx).await?;
+
+backend.enqueue_in_tx(
+    "SendEmail",        // job kind
+    "emails",           // queue name
+    serde_json::to_vec(&SendEmail { to: "user@example.com".into() })?,
+    3,                  // max_attempts
+    Utc::now(),         // schedule immediately
+    &mut tx,
+).await?;
+
+tx.commit().await?;    // job becomes visible here — rolls back if this fails
+```
+
 ## Admin UI (asyncq-axum)
 
 Mount the admin router to get REST endpoints and Prometheus metrics:
@@ -214,9 +257,9 @@ let app = Router::new()
 
 | Crate | Backend | Status |
 |-------|---------|--------|
-| `asyncq-redis` | Redis | ✅ v0.1.0 |
-| `asyncq-axum` | Admin router + Prometheus | ✅ v0.1.0 |
-| `asyncq-postgres` | PostgreSQL | 🔜 v0.2.0 |
+| `asyncq-redis` | Redis | ✅ stable |
+| `asyncq-postgres` | PostgreSQL (transactional outbox) | ✅ stable |
+| `asyncq-axum` | Admin router + Prometheus | ✅ stable |
 
 ## Testing without Redis
 
