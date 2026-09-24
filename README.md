@@ -1,30 +1,49 @@
 # asyncq
 
-Async background job processing for Rust. Like Sidekiq, but with a derive macro.
+[![Crates.io](https://img.shields.io/crates/v/asyncq.svg)](https://crates.io/crates/asyncq)
+[![Documentation](https://docs.rs/asyncq/badge.svg)](https://docs.rs/asyncq)
+[![License](https://img.shields.io/crates/l/asyncq.svg)](LICENSE)
+
+**Type-safe background jobs for Rust.** Define once with `#[derive(Job)]`, run anywhere.
 
 ```toml
 [dependencies]
 asyncq = "0.1"
-asyncq-redis = "0.1"
+asyncq-redis = "0.1"  # or asyncq-postgres
 serde = { version = "1", features = ["derive"] }
 ```
 
 ## Why asyncq?
 
-Every other Rust job queue makes you write boilerplate for every job type. asyncq uses a derive macro instead:
+Most Rust job queues copy the Tower/Service pattern — you write boilerplate for every job type. asyncq takes a different approach: **derive macros with compile-time validation**.
 
 ```rust
-// asyncq — one attribute, done
+// asyncq — define your job, implement perform, done
 #[derive(Job, Serialize, Deserialize)]
 #[job(queue = "emails", retries = 3)]
-struct WelcomeEmail { email: String }
+struct WelcomeEmail { to: String }
 
-// apalis — tower::Service boilerplate per job type
+impl Perform for WelcomeEmail {
+    async fn perform(self, ctx: JobContext) -> JobResult {
+        send_email(&self.to).await
+    }
+}
+```
+
+Compare to apalis (Tower-based):
+```rust
+// apalis — define job, define service, define layer, wire builder
+struct WelcomeEmail { to: String }
+async fn send_email(job: WelcomeEmail, ctx: JobContext) -> Result<(), Error> { ... }
+
 WorkerBuilder::new("email-worker")
     .layer(RetryLayer::new(DefaultRetryPolicy))
-    .source(pg.clone())
-    .build_fn(email_service)
+    .layer(TimeoutLayer::new(Duration::from_secs(30)))
+    .source(storage.clone())
+    .build_fn(send_email)
 ```
+
+**asyncq moves configuration to the type level** — retries, timeouts, and queue names are part of the job definition, not runtime wiring. Typos become compile errors.
 
 ## Quick start
 
@@ -33,273 +52,192 @@ use asyncq::{Job, Perform, JobContext, JobResult, Queue, Worker};
 use asyncq_redis::RedisBackend;
 use serde::{Serialize, Deserialize};
 
-// 1. Define your job
 #[derive(Job, Serialize, Deserialize)]
 #[job(queue = "emails", retries = 3)]
-struct WelcomeEmail {
-    email: String,
-}
+struct WelcomeEmail { to: String }
 
-// 2. Implement the work
 impl Perform for WelcomeEmail {
     async fn perform(self, _ctx: JobContext) -> JobResult {
-        println!("Sending welcome email to {}", self.email);
+        println!("Sending to {}", self.to);
         Ok(())
     }
 }
 
 #[tokio::main]
 async fn main() {
-    // 3. Connect to Redis
     let backend = RedisBackend::new("redis://127.0.0.1/").await.unwrap();
     let queue = Queue::new(backend);
 
-    // 4. Enqueue from anywhere (axum handler, CLI, cron, etc.)
-    queue.enqueue(WelcomeEmail { email: "user@example.com".into() }).await.unwrap();
+    // Enqueue from anywhere
+    queue.enqueue(WelcomeEmail { to: "user@example.com".into() }).await.unwrap();
 
-    // 5. Process — register all job types once, then run
+    // Process
     Worker::new(queue)
         .register::<WelcomeEmail>()
         .concurrency(10)
-        .run()         // blocks; use run_graceful(ctrl_c()) for clean shutdown
+        .run()
         .await;
 }
 ```
 
-## Shared state (database pool, config, etc.)
+## Features
 
-Pass your app state once at startup. Jobs access it via `ctx.state::<T>()` — the same pattern as axum's `State<T>`.
+### State injection
+
+Pass app state once at startup. Access via `ctx.state::<T>()` — same pattern as axum.
 
 ```rust
-use std::sync::Arc;
-use sqlx::PgPool;
-
 let pool = Arc::new(PgPool::connect("postgres://...").await?);
-
-// Attach state to the queue
 let queue = Queue::new(backend).with_state(Arc::clone(&pool));
 
-// Access it inside any job
-impl Perform for SendInvoice {
+impl Perform for ProcessOrder {
     async fn perform(self, ctx: JobContext) -> JobResult {
-        let pool = ctx.state::<Arc<PgPool>>().expect("pool not in state");
-        sqlx::query!("INSERT INTO invoices ...").execute(pool.as_ref()).await?;
+        let pool = ctx.state::<Arc<PgPool>>().expect("pool");
+        sqlx::query!("UPDATE orders SET status = 'processed' WHERE id = $1", self.id)
+            .execute(pool.as_ref()).await?;
         Ok(())
     }
 }
 ```
 
-## Scheduling
+### Scheduling
 
 ```rust
-use std::time::Duration;
-use chrono::Utc;
-
-// Run immediately
-queue.enqueue(MyJob { .. }).await?;
-
-// Run after a delay
-queue.enqueue_in(ReminderJob { .. }, Duration::from_secs(3600)).await?;
-
-// Run at a specific time
-queue.enqueue_at(ReportJob { .. }, Utc::now() + chrono::Duration::days(1)).await?;
+queue.enqueue(job).await?;                                    // now
+queue.enqueue_in(job, Duration::from_secs(3600)).await?;      // 1 hour
+queue.enqueue_at(job, Utc::now() + Duration::days(1)).await?; // tomorrow
 ```
 
-## Error handling
-
-Return `Ok(())` to mark a job complete. Return `Err` to retry. Return `JobError::discard` to skip retries and send directly to the dead-letter queue.
+### Error handling
 
 ```rust
-use asyncq::{JobError, JobResult};
-
 impl Perform for ProcessPayment {
     async fn perform(self, ctx: JobContext) -> JobResult {
-        match charge_card(&self.card_token).await {
+        match charge_card(&self.token).await {
             Ok(_) => Ok(()),
-            Err(e) if e.is_retryable() => Err(JobError::retry(e)),
-            Err(e) => Err(JobError::discard(e)),  // permanent failure → DLQ
+            Err(e) if e.is_retryable() => Err(JobError::retry(e)),   // retry with backoff
+            Err(e) => Err(JobError::discard(e)),                     // skip to DLQ
         }
     }
 }
 ```
 
-Retry backoff is exponential: `30s × 2^attempt`, capped at 1 hour.
+Backoff is exponential: `30s × 2^attempt`, capped at 1 hour.
 
-## Job attributes
+### Job attributes
 
 ```rust
 #[derive(Job, Serialize, Deserialize)]
 #[job(
-    queue = "payments",       // required: which queue to enqueue to
-    retries = 5,              // default: 10
-    timeout_secs = 30,        // optional: per-job execution timeout
-    kind = "MyCustomKind",    // optional: override the job type identifier
+    queue = "payments",    // required
+    retries = 5,           // default: 10
+    timeout_secs = 30,     // optional
+    kind = "ProcessPay",   // optional: custom type identifier
 )]
-struct ProcessPayment {
-    amount_cents: u64,
-}
+struct ProcessPayment { amount_cents: u64 }
 ```
 
-## Worker options
+### Worker options
 
 ```rust
 Worker::new(queue)
     .register::<WelcomeEmail>()
     .register::<ProcessPayment>()
-    .register::<GenerateReport>()
-    .concurrency(20)                          // concurrent jobs (default: 10)
-    .queues(["high", "default", "low"])       // explicit priority order
-    .stuck_timeout(Duration::from_secs(120)) // reset jobs stuck > 120s (default)
+    .concurrency(20)                          // concurrent jobs
+    .queues(["critical", "default", "low"])   // priority order
+    .stuck_timeout(Duration::from_secs(120))  // requeue stuck jobs
     .run()
     .await;
 ```
 
-## Graceful shutdown
+### Graceful shutdown
 
 ```rust
-// Stop cleanly on Ctrl-C — current batch completes before exit
 worker.run_graceful(async {
     tokio::signal::ctrl_c().await.ok();
 }).await;
 ```
 
-## Dead-letter queue
+### Dead-letter queue
 
 ```rust
-// List dead jobs
 let dead = queue.dead_jobs("payments", 50, 0).await?;
-
-// Retry one
-queue.retry_dead(dead[0].id).await?;
-
-// Retry all
-let requeued = queue.retry_all_dead("payments").await?;
-println!("Requeued {} jobs", requeued);
+queue.retry_dead(dead[0].id).await?;           // retry one
+queue.retry_all_dead("payments").await?;       // retry all
 ```
 
-## Queue stats
+### Queue stats
 
 ```rust
 let stats = queue.stats("emails").await?;
 println!("pending={} running={} dead={}", stats.pending, stats.running, stats.dead);
 ```
 
-## PostgreSQL backend (asyncq-postgres)
+## Backends
 
-Use PostgreSQL as the job store — no Redis required. Supports the transactional outbox pattern.
+| Crate | Use case |
+|-------|----------|
+| [`asyncq-redis`](https://crates.io/crates/asyncq-redis) | Production Redis backend |
+| [`asyncq-postgres`](https://crates.io/crates/asyncq-postgres) | PostgreSQL with transactional outbox |
+| [`asyncq-axum`](https://crates.io/crates/asyncq-axum) | Admin REST API + Prometheus metrics |
 
-```toml
-[dependencies]
-asyncq-postgres = "0.1"
-```
+### PostgreSQL + transactional outbox
+
+Enqueue jobs in the same transaction as your business logic — if the transaction rolls back, so does the job.
 
 ```rust
-use asyncq::{Queue, Worker};
 use asyncq_postgres::PostgresBackend;
 
-let backend = PostgresBackend::new("postgres://user:pass@localhost/mydb").await?;
-backend.migrate().await?;  // creates asyncq_jobs table — safe to call on every startup
-
-let queue = Queue::new(backend.clone());
-queue.enqueue(SendEmail { to: "user@example.com".into() }).await?;
-Worker::new(queue).register::<SendEmail>().run().await;
-```
-
-### Transactional outbox
-
-Enqueue a job inside the same DB transaction as your business logic. The job is only visible to workers after `tx.commit()`.
-
-```rust
-use chrono::Utc;
+let backend = PostgresBackend::new("postgres://...").await?;
+backend.migrate().await?;  // creates asyncq_jobs table
 
 let mut tx = pool.begin().await?;
-sqlx::query("INSERT INTO orders (status) VALUES ('pending')").execute(&mut *tx).await?;
-
-backend.enqueue_in_tx(
-    "SendEmail",        // job kind
-    "emails",           // queue name
-    serde_json::to_vec(&SendEmail { to: "user@example.com".into() })?,
-    3,                  // max_attempts
-    Utc::now(),         // schedule immediately
-    &mut tx,
-).await?;
-
-tx.commit().await?;    // job becomes visible here — rolls back if this fails
+sqlx::query("INSERT INTO orders ...").execute(&mut *tx).await?;
+backend.enqueue_in_tx("SendReceipt", "emails", payload, 3, Utc::now(), &mut tx).await?;
+tx.commit().await?;  // job visible only after commit
 ```
 
-## Admin UI (asyncq-axum)
-
-Mount the admin router to get REST endpoints and Prometheus metrics:
-
-```toml
-[dependencies]
-asyncq-axum = "0.1"
-```
+### Admin API (asyncq-axum)
 
 ```rust
 use asyncq_axum::admin;
-use axum::Router;
-
-let app = Router::new()
-    .nest("/admin", admin(queue.clone()))
-    /* ... your routes ... */;
+let app = Router::new().nest("/admin", admin(queue.clone()));
 ```
 
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/admin/queues/:name` | Stats (pending, running, dead) |
-| GET | `/admin/queues/:name/dlq` | List dead-letter jobs (paginated) |
-| POST | `/admin/queues/:name/dlq/retry-all` | Requeue all dead jobs |
-| DELETE | `/admin/queues/:name/dlq/:id` | Retry one dead job |
-| GET | `/admin/metrics` | Prometheus text format |
+| Endpoint | Description |
+|----------|-------------|
+| `GET /queues/:name` | Stats |
+| `GET /queues/:name/dlq` | Dead jobs (paginated) |
+| `POST /queues/:name/dlq/retry-all` | Retry all dead |
+| `DELETE /queues/:name/dlq/:id` | Retry one |
+| `GET /metrics` | Prometheus format |
 
-## Backends
+## Testing
 
-| Crate | Backend | Status |
-|-------|---------|--------|
-| `asyncq-redis` | Redis | ✅ stable |
-| `asyncq-postgres` | PostgreSQL (transactional outbox) | ✅ stable |
-| `asyncq-axum` | Admin router + Prometheus | ✅ stable |
-
-## Testing without Redis
-
-Use `InMemoryBackend` in tests — no external infrastructure required:
+Use `InMemoryBackend` — no Redis required:
 
 ```rust
-use asyncq::{Queue, Worker, backends::InMemoryBackend};
-
 #[tokio::test]
 async fn test_my_job() {
     let backend = InMemoryBackend::new().with_immediate_retries();
     let queue = Queue::new(backend.clone());
 
-    queue.enqueue(WelcomeEmail { email: "test@test.com".into() }).await.unwrap();
+    queue.enqueue(MyJob { .. }).await.unwrap();
+    Worker::new(queue).register::<MyJob>().run_once().await.unwrap();
 
-    Worker::new(queue)
-        .register::<WelcomeEmail>()
-        .run_once()   // process all pending jobs and return — no Ctrl-C needed
-        .await
-        .unwrap();
-
-    assert_eq!(backend.completed_count("emails").await, 1);
-    assert_eq!(backend.failed_count("emails").await, 0);
+    assert_eq!(backend.completed_count("default").await, 1);
 }
 ```
 
-`with_immediate_retries()` makes retried jobs immediately claimable, so you can test retry cycles without sleeping.
+`run_once()` processes all pending jobs and returns — no Ctrl-C needed.
 
-## Running examples
+## Roadmap
 
-```bash
-# Start Redis
-docker run -d -p 6379:6379 redis:7-alpine
-
-# Basic example
-cargo run --example basic
-
-# With state (shared DB pool pattern)
-cargo run --example with_state
-```
+- [ ] **Cron scheduling** — `#[job(cron = "0 9 * * *")]`
+- [ ] **Unique jobs** — deduplicate by payload hash
+- [ ] **Middleware** — before/after hooks
+- [ ] **Rate limiting** — per-queue throttling
+- [ ] **Job chains** — `JobA.then(JobB).then(JobC)`
 
 ## License
 
