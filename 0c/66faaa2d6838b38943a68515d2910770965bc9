@@ -1,0 +1,21 @@
+asyncq-derive/Cargo.toml
+  s_2d15d21b5025d8::t_ec3cf580c70100 3
+Cargo.toml
+  s_2d15d21b5025d8::t_9a4eca8516f5f4 12
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.24",
+  "base_commit_sha": "0c66faaa2d6838b38943a68515d2910770965bc9",
+  "prompts": {},
+  "sessions": {
+    "s_2d15d21b5025d8": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "2bb5fa86-87ca-45eb-a2ce-87382c749102",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "Biplab Das <dasbiplabtu@gmail.com>"
+    }
+  }
+}
