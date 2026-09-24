@@ -1,0 +1,35 @@
+Cargo.toml
+  s_2d15d21b5025d8::t_ed5c4b494997ad 12
+asyncq-postgres/src/lib.rs
+  s_2d15d21b5025d8::t_3c70c78c015613 1-36,38-65,67-93,100,103-358
+  s_2d15d21b5025d8::t_d78b92427be8be 94-98
+  s_2d15d21b5025d8::t_6b21a067068e7c 99,101-102
+  s_2d15d21b5025d8::t_39a5b7fc7de60b 66
+  s_2d15d21b5025d8::t_1f8582a2a5e137 37
+asyncq-postgres/tests/postgres_backend.rs
+  s_2d15d21b5025d8::t_0a36a67735d7b0 74
+  s_2d15d21b5025d8::t_4ee5855d520451 23,26-29,31,56,70,73,76,81-82,100,104,119-122,140-143,164-167
+  s_2d15d21b5025d8::t_e90824832c7f12 1-22,24-25,30,32-55,57-69,71-72,75,77-80,83-99,101-103,105-118,123-139,144-163,168-211
+asyncq-postgres/Cargo.toml
+  s_2d15d21b5025d8::t_f51ff6f29b36a0 3
+  s_2d15d21b5025d8::t_b0b8aa608eb32d 6,24-27
+  s_2d15d21b5025d8::t_b87ab18ad39164 28
+asyncq-postgres/migrations/0001_create_asyncq_jobs.sql
+  s_2d15d21b5025d8::t_c06b6606394ef8 1-29
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.24",
+  "base_commit_sha": "62e4d3edd5ef66a89e62cb689bbe7595a9f2780a",
+  "prompts": {},
+  "sessions": {
+    "s_2d15d21b5025d8": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "2bb5fa86-87ca-45eb-a2ce-87382c749102",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "Biplab Das <dasbiplabtu@gmail.com>"
+    }
+  }
+}
