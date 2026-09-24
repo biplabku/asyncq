@@ -1,0 +1,37 @@
+asyncq-postgres/src/lib.rs
+  s_2d15d21b5025d8::t_fb991dc8be0ca3 35-37,40-62
+asyncq-derive/Cargo.toml
+  s_2d15d21b5025d8::t_943ca93fc6e61a 12
+asyncq/src/error.rs
+  s_2d15d21b5025d8::t_df6ae99c2e769c 63
+README.md
+  s_2d15d21b5025d8::t_8eebe54912f024 187-229
+  s_2d15d21b5025d8::t_7e9c502e2e9280 260-262
+Cargo.toml
+  s_2d15d21b5025d8::t_80dc8802010c1f 17
+  s_2d15d21b5025d8::t_df41c53eb61c01 12,45-46
+asyncq-redis/Cargo.toml
+  s_2d15d21b5025d8::t_60d172f60f9917 12
+asyncq/Cargo.toml
+  s_2d15d21b5025d8::t_3b43417a956e20 12
+asyncq-axum/Cargo.toml
+  s_2d15d21b5025d8::t_d2e00fed5a56a2 12
+asyncq-postgres/Cargo.toml
+  s_2d15d21b5025d8::t_fa91ccd3ddbf3c 12
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.24",
+  "base_commit_sha": "11f3dca5269061c2c61d6716eaf5d4ab9c35254b",
+  "prompts": {},
+  "sessions": {
+    "s_2d15d21b5025d8": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "2bb5fa86-87ca-45eb-a2ce-87382c749102",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "Biplab Das <dasbiplabtu@gmail.com>"
+    }
+  }
+}
