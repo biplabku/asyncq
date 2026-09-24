@@ -1,8 +1,9 @@
 [package]
 name = "asyncq-postgres"
-description = "PostgreSQL backend for jobqueuesmith"
+description = "PostgreSQL backend for asyncq — production-grade async job queue for Rust"
 keywords = ["jobs", "queue", "postgres", "background", "worker"]
 categories = ["asynchronous", "web-programming", "database"]
+readme = "../README.md"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true
@@ -19,4 +20,9 @@ uuid.workspace = true
 thiserror.workspace = true
 async-trait.workspace = true
 tracing.workspace = true
+sqlx = { version = "0.8", features = ["postgres", "uuid", "chrono", "runtime-tokio"] }
+
+[dev-dependencies]
+tokio = { version = "1", features = ["full"] }
+tracing-subscriber = "0.3"
 sqlx = { version = "0.8", features = ["postgres", "uuid", "chrono", "runtime-tokio"] }
