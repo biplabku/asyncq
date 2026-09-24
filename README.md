@@ -108,6 +108,30 @@ queue.enqueue_in(job, Duration::from_secs(3600)).await?;      // 1 hour
 queue.enqueue_at(job, Utc::now() + Duration::days(1)).await?; // tomorrow
 ```
 
+### Cron scheduling
+
+Run jobs on a recurring schedule:
+
+```rust
+use asyncq::Scheduler;
+
+#[derive(Job, Serialize, Deserialize, Default)]
+#[job(queue = "reports")]
+struct DailyReport;
+
+let scheduler = Scheduler::new(queue.clone())
+    .register::<DailyReport>("0 0 9 * * *")      // every day at 9am
+    .register::<WeeklyDigest>("0 0 0 * * Sun");  // every Sunday at midnight
+
+// Run alongside your worker
+tokio::select! {
+    _ = scheduler.run() => {}
+    _ = worker.run() => {}
+}
+```
+
+Cron format: `second minute hour day-of-month month day-of-week`
+
 ### Error handling
 
 ```rust
@@ -233,7 +257,7 @@ async fn test_my_job() {
 
 ## Roadmap
 
-- [ ] **Cron scheduling** — `#[job(cron = "0 9 * * *")]`
+- [x] **Cron scheduling** — `Scheduler::register::<Job>("0 0 9 * * *")`
 - [ ] **Unique jobs** — deduplicate by payload hash
 - [ ] **Middleware** — before/after hooks
 - [ ] **Rate limiting** — per-queue throttling

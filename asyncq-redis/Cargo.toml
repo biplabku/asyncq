@@ -36,3 +36,7 @@ path = "examples/basic.rs"
 [[example]]
 name = "with_state"
 path = "examples/with_state.rs"
+
+[[example]]
+name = "cron"
+path = "examples/cron.rs"

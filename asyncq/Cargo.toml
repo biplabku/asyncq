@@ -23,6 +23,7 @@ thiserror.workspace = true
 async-trait.workspace = true
 tracing.workspace = true
 asyncq-derive.workspace = true
+cron = "0.17"
 
 [dev-dependencies]
 tokio = { version = "1", features = ["full"] }
