@@ -1,6 +1,6 @@
 [package]
 name = "asyncq"
-description = "Async background job processing for Rust — #[derive(Job)] API, Redis/PostgreSQL backends, Sidekiq/Celery-style worker"
+description = "Async background job processing for Rust — #[derive(Job)] API, Redis backend, Sidekiq/Celery-style worker"
 keywords = ["jobs", "queue", "sidekiq", "worker", "background"]
 categories = ["asynchronous", "web-programming", "database"]
 readme = "../README.md"

@@ -184,11 +184,38 @@ let stats = queue.stats("emails").await?;
 println!("pending={} running={} dead={}", stats.pending, stats.running, stats.dead);
 ```
 
+## Admin UI (asyncq-axum)
+
+Mount the admin router to get REST endpoints and Prometheus metrics:
+
+```toml
+[dependencies]
+asyncq-axum = "0.1"
+```
+
+```rust
+use asyncq_axum::admin;
+use axum::Router;
+
+let app = Router::new()
+    .nest("/admin", admin(queue.clone()))
+    /* ... your routes ... */;
+```
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/admin/queues/:name` | Stats (pending, running, dead) |
+| GET | `/admin/queues/:name/dlq` | List dead-letter jobs (paginated) |
+| POST | `/admin/queues/:name/dlq/retry-all` | Requeue all dead jobs |
+| DELETE | `/admin/queues/:name/dlq/:id` | Retry one dead job |
+| GET | `/admin/metrics` | Prometheus text format |
+
 ## Backends
 
 | Crate | Backend | Status |
 |-------|---------|--------|
 | `asyncq-redis` | Redis | ✅ v0.1.0 |
+| `asyncq-axum` | Admin router + Prometheus | ✅ v0.1.0 |
 | `asyncq-postgres` | PostgreSQL | 🔜 v0.2.0 |
 
 ## Testing without Redis

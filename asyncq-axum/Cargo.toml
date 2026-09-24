@@ -1,8 +1,9 @@
 [package]
 name = "asyncq-axum"
-description = "Axum integration for jobqueuesmith — admin router with Prometheus metrics and DLQ management"
+description = "Axum integration for asyncq — admin REST endpoints with Prometheus metrics and DLQ management"
 keywords = ["jobs", "queue", "axum", "admin", "background"]
 categories = ["asynchronous", "web-programming"]
+readme = "../README.md"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true
@@ -18,5 +19,9 @@ chrono.workspace = true
 uuid.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
-axum = { version = "0.7", default-features = false }
+axum = { version = "0.7", features = ["json"] }
 http = "1"
+
+[dev-dependencies]
+tokio = { version = "1", features = ["full"] }
+tower = { version = "0.4", features = ["util"] }
