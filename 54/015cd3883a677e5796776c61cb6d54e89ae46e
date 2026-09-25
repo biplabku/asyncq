@@ -1,0 +1,19 @@
+asyncq-postgres/src/lib.rs
+  s_1c23074f8afe9c::t_ccbc1155bbaeb9 111-115,117-127
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.24",
+  "base_commit_sha": "54015cd3883a677e5796776c61cb6d54e89ae46e",
+  "prompts": {},
+  "sessions": {
+    "s_1c23074f8afe9c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ad72de54-37db-49c0-9aa4-44e23457b173",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "Biplab Das <dasbiplabtu@gmail.com>"
+    }
+  }
+}
