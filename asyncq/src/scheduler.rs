@@ -98,7 +98,7 @@ impl<B: Backend> Scheduler<B> {
     pub fn register<J: Perform + Default>(mut self, cron_expr: &str) -> Self {
         let schedule: Schedule = cron_expr
             .parse()
-            .unwrap_or_else(|e| panic!("invalid cron expression '{}': {}", cron_expr, e));
+            .unwrap_or_else(|e| panic!("invalid cron expression '{cron_expr}': {e}"));
 
         let next_fire = schedule
             .upcoming(Utc)
@@ -144,7 +144,7 @@ impl<B: Backend> Scheduler<B> {
     {
         let schedule: Schedule = cron_expr
             .parse()
-            .unwrap_or_else(|e| panic!("invalid cron expression '{}': {}", cron_expr, e));
+            .unwrap_or_else(|e| panic!("invalid cron expression '{cron_expr}': {e}"));
 
         let next_fire = schedule
             .upcoming(Utc)

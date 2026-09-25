@@ -276,7 +276,7 @@ impl Backend for InMemoryBackend {
         let mut lock = self.queues.lock().await;
         let q = Self::get_or_create(&mut lock, queue);
         let count = q.dead.len() as u64;
-        let dead: Vec<_> = q.dead.drain(..).collect();
+        let dead = std::mem::take(&mut q.dead);
         for mut record in dead {
             record.scheduled_at = Utc::now();
             q.pending.push_back(record);

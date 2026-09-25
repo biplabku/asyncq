@@ -47,7 +47,6 @@
 //! | DELETE | `/admin/queues/{name}/dlq/{id}` | Retry one dead job by ID |
 //! | GET | `/admin/metrics` | Prometheus text metrics |
 
-use std::sync::Arc;
 use actix_web::{
     HttpResponse, Responder,
     web::{self, Data, Path, Query, ServiceConfig},
