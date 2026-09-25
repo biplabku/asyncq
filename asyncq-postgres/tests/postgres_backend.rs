@@ -8,12 +8,15 @@ use serde::{Deserialize, Serialize};
 use std::sync::{Arc, Mutex};
 use uuid::Uuid;
 
-const DB_URL: &str = "postgres://hooksmith:hooksmith@localhost/hooksmith";
+fn db_url() -> String {
+    std::env::var("DATABASE_URL")
+        .unwrap_or_else(|_| "postgres://hooksmith:hooksmith@localhost/hooksmith".to_string())
+}
 
 fn uq(tag: &str) -> String { format!("pgtest-{tag}-{}", Uuid::new_v4().simple()) }
 
 async fn backend() -> PostgresBackend {
-    let b = PostgresBackend::new(DB_URL).await.expect("Postgres must be running");
+    let b = PostgresBackend::new(&db_url()).await.expect("Postgres must be running");
     b.migrate().await.expect("migration failed");
     b
 }

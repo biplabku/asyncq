@@ -2,6 +2,7 @@
 
 [![Crates.io](https://img.shields.io/crates/v/asyncq.svg)](https://crates.io/crates/asyncq)
 [![Documentation](https://docs.rs/asyncq/badge.svg)](https://docs.rs/asyncq)
+[![CI](https://github.com/biplabku/asyncq/actions/workflows/ci.yml/badge.svg)](https://github.com/biplabku/asyncq/actions/workflows/ci.yml)
 [![License](https://img.shields.io/crates/l/asyncq.svg)](LICENSE)
 
 **Type-safe background jobs for Rust.** Define once with `#[derive(Job)]`, run anywhere.
