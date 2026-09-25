@@ -30,11 +30,12 @@
 //! # Redis key layout
 //!
 //! ```text
-//! asyncq:q:{queue}:pending     LIST  job_ids (LPUSH enqueue, BRPOP claim)
-//! asyncq:q:{queue}:delayed     ZSET  job_id → run_at_unix (for scheduled jobs)
-//! asyncq:q:{queue}:dead        ZSET  job_id → failed_at_unix
-//! asyncq:processing            ZSET  job_id → last_heartbeat_unix
-//! asyncq:jobs:{job_id}         HASH  all job fields
+//! asyncq:q:{queue}:pending     LIST    job_ids (LPUSH enqueue, BRPOP claim)
+//! asyncq:q:{queue}:delayed     ZSET    job_id → run_at_unix (scheduled jobs)
+//! asyncq:q:{queue}:dead        ZSET    job_id → failed_at_unix
+//! asyncq:q:{queue}:completed   INTEGER lifetime count of successfully acked jobs
+//! asyncq:processing            ZSET    job_id → last_heartbeat_unix
+//! asyncq:jobs:{job_id}         HASH    all job fields
 //! ```
 
 use std::time::Duration;
@@ -54,10 +55,11 @@ use asyncq::{
 
 // ── Key helpers ───────────────────────────────────────────────────────────────
 
-fn key_pending(queue: &str)    -> String { format!("asyncq:q:{queue}:pending") }
-fn key_delayed(queue: &str)    -> String { format!("asyncq:q:{queue}:delayed") }
-fn key_dead(queue: &str)       -> String { format!("asyncq:q:{queue}:dead")    }
-fn key_job(id: JobId)          -> String { format!("asyncq:jobs:{id}")         }
+fn key_pending(queue: &str)    -> String { format!("asyncq:q:{queue}:pending")   }
+fn key_delayed(queue: &str)    -> String { format!("asyncq:q:{queue}:delayed")   }
+fn key_dead(queue: &str)       -> String { format!("asyncq:q:{queue}:dead")      }
+fn key_completed(queue: &str)  -> String { format!("asyncq:q:{queue}:completed") }
+fn key_job(id: JobId)          -> String { format!("asyncq:jobs:{id}")           }
 const KEY_PROCESSING: &str = "asyncq:processing";
 
 // ── RedisBackend ──────────────────────────────────────────────────────────────
@@ -262,13 +264,23 @@ impl Backend for RedisBackend {
 
     async fn ack(&self, id: JobId) -> Result<()> {
         let mut conn = self.conn.clone();
-        // Remove from processing, delete job hash
+        // Read queue name before deleting the hash so we can increment the counter
+        let queue: Option<String> = conn.hget(key_job(id), "queue")
+            .await
+            .map_err(|e| Error::Backend(e.to_string()))?;
+        // Remove from processing and delete job hash
         conn.zrem::<_, _, ()>(KEY_PROCESSING, id.to_string())
             .await
             .map_err(|e| Error::Backend(e.to_string()))?;
         conn.del::<_, ()>(key_job(id))
             .await
             .map_err(|e| Error::Backend(e.to_string()))?;
+        // Increment per-queue completed counter
+        if let Some(q) = queue {
+            conn.incr::<_, _, ()>(key_completed(&q), 1_u64)
+                .await
+                .map_err(|e| Error::Backend(e.to_string()))?;
+        }
         Ok(())
     }
 
@@ -376,12 +388,18 @@ impl Backend for RedisBackend {
             .map_err(|e| Error::Backend(e.to_string()))?;
         let running: u64 = conn.zcard(KEY_PROCESSING).await
             .map_err(|e| Error::Backend(e.to_string()))?;
+        // Returns None (nil) if no jobs have been acked yet on this queue
+        let completed: u64 = conn
+            .get::<_, Option<u64>>(key_completed(queue))
+            .await
+            .map_err(|e| Error::Backend(e.to_string()))?
+            .unwrap_or(0);
 
         Ok(QueueStats {
             queue: queue.to_owned(),
             pending: pending + delayed,
             running,
-            completed: 0, // Redis doesn't track completed by default
+            completed,
             failed: 0,
             dead,
         })

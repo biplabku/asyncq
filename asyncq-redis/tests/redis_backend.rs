@@ -273,3 +273,75 @@ async fn redis_stats_reflect_queue_state() {
 
     cleanup(&q).await;
 }
+
+#[tokio::test]
+async fn redis_completed_counter_increments_on_success() {
+    let q = uq("completed");
+    cleanup(&q).await;
+    // Also clean the completed counter key
+    {
+        use redis::AsyncCommands;
+        if let Ok(client) = redis::Client::open(REDIS_URL) {
+            if let Ok(mut c) = client.get_multiplexed_async_connection().await {
+                let _: Result<(), _> = c.del(format!("asyncq:q:{}:completed", q)).await;
+            }
+        }
+    }
+
+    let b = backend().await;
+    let queue = Queue::new(b.clone());
+
+    assert_eq!(queue.stats(&q).await.unwrap().completed, 0, "starts at 0");
+
+    // Enqueue and process 3 jobs that all succeed
+    for i in 0..3u32 {
+        let record = JobRecord::new("OkJob", &q, raw_payload(&OkJob { value: i }), 3);
+        queue.enqueue_record(record).await.unwrap();
+    }
+
+    Worker::new(queue.clone())
+        .register::<OkJob>()
+        .queues([q.as_str()])
+        .run_once()
+        .await
+        .unwrap();
+
+    let stats = queue.stats(&q).await.unwrap();
+    assert_eq!(stats.completed, 3, "completed must equal number of successful jobs");
+    assert_eq!(stats.pending, 0);
+
+    cleanup(&q).await;
+}
+
+#[tokio::test]
+async fn redis_completed_counter_not_incremented_on_discard() {
+    let q = uq("completed-discard");
+    cleanup(&q).await;
+    {
+        use redis::AsyncCommands;
+        if let Ok(client) = redis::Client::open(REDIS_URL) {
+            if let Ok(mut c) = client.get_multiplexed_async_connection().await {
+                let _: Result<(), _> = c.del(format!("asyncq:q:{}:completed", q)).await;
+            }
+        }
+    }
+
+    let b = backend().await;
+    let queue = Queue::new(b.clone());
+
+    let record = JobRecord::new("DiscardJob", &q, raw_payload(&DiscardJob), 1);
+    queue.enqueue_record(record).await.unwrap();
+
+    Worker::new(queue.clone())
+        .register::<DiscardJob>()
+        .queues([q.as_str()])
+        .run_once()
+        .await
+        .unwrap();
+
+    let stats = queue.stats(&q).await.unwrap();
+    assert_eq!(stats.completed, 0, "discarded jobs must not increment completed");
+    assert_eq!(stats.dead, 1, "discarded job must be in DLQ");
+
+    cleanup(&q).await;
+}
