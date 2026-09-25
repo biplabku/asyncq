@@ -44,15 +44,43 @@ use asyncq::{backend::Backend, job::QueueStats, Queue};
 #[derive(Clone)]
 struct AdminState<B: Backend> {
     queue: Queue<B>,
+    /// Queue names exposed in /metrics. Empty = metrics stub only.
+    monitored_queues: Vec<String>,
 }
 
 // ── Admin router ──────────────────────────────────────────────────────────────
 
 /// Build the admin Router. Mount it with `router.nest("/admin", admin(queue))`.
 ///
-/// The router is cloneable and stateless beyond the queue reference it holds.
+/// The `/metrics` endpoint returns a minimal Prometheus stub. To get live
+/// per-queue gauges, use [`admin_with_queues`] instead.
 pub fn admin<B: Backend + Clone + 'static>(queue: Queue<B>) -> Router {
-    let state = Arc::new(AdminState { queue });
+    admin_with_queues(queue, vec![])
+}
+
+/// Build the admin Router with live Prometheus metrics for the given queue names.
+///
+/// ```rust,no_run
+/// use asyncq::{Queue, backends::InMemoryBackend};
+/// use asyncq_axum::admin_with_queues;
+/// use axum::Router;
+///
+/// let queue = Queue::new(InMemoryBackend::new());
+/// let app = Router::new()
+///     .nest("/admin", admin_with_queues(queue, vec!["emails".into(), "payments".into()]));
+/// ```
+///
+/// The `/metrics` endpoint will then expose:
+/// ```text
+/// asyncq_jobs_pending{queue="emails"} 3
+/// asyncq_jobs_running{queue="emails"} 1
+/// asyncq_jobs_dead{queue="emails"} 0
+/// ```
+pub fn admin_with_queues<B: Backend + Clone + 'static>(
+    queue: Queue<B>,
+    queues: Vec<String>,
+) -> Router {
+    let state = Arc::new(AdminState { queue, monitored_queues: queues });
     Router::new()
         .route("/queues/:name",              get(queue_stats))
         .route("/queues/:name/dlq",          get(list_dlq))
@@ -123,21 +151,57 @@ async fn retry_one<B: Backend + Clone + 'static>(
 }
 
 async fn metrics<B: Backend + Clone + 'static>(
-    State(_s): State<Arc<AdminState<B>>>,
+    State(s): State<Arc<AdminState<B>>>,
 ) -> impl IntoResponse {
-    // Lightweight Prometheus text format — no external crate needed.
-    // Returns a minimal help/type block with a timestamp placeholder.
-    let body = [
-        "# HELP asyncq_info asyncq version info",
-        "# TYPE asyncq_info gauge",
-        "asyncq_info{version=\"0.1.1\"} 1",
-        "",
-        "# HELP asyncq_jobs_pending Number of jobs waiting to be processed",
-        "# TYPE asyncq_jobs_pending gauge",
-        "# (queue-specific metrics available via GET /admin/queues/:name)",
-        "",
-    ]
-    .join("\n");
+    let mut lines: Vec<String> = Vec::new();
+
+    // Collect live stats for each monitored queue
+    let mut all_stats: Vec<(String, QueueStats)> = Vec::new();
+    for q in &s.monitored_queues {
+        if let Ok(stats) = s.queue.stats(q).await {
+            all_stats.push((q.clone(), stats));
+        }
+    }
+
+    // pending
+    lines.push("# HELP asyncq_jobs_pending Jobs waiting to be processed".into());
+    lines.push("# TYPE asyncq_jobs_pending gauge".into());
+    for (q, st) in &all_stats {
+        lines.push(format!("asyncq_jobs_pending{{queue=\"{}\"}} {}", q, st.pending));
+    }
+
+    // running
+    lines.push("".into());
+    lines.push("# HELP asyncq_jobs_running Jobs currently being processed".into());
+    lines.push("# TYPE asyncq_jobs_running gauge".into());
+    for (q, st) in &all_stats {
+        lines.push(format!("asyncq_jobs_running{{queue=\"{}\"}} {}", q, st.running));
+    }
+
+    // dead
+    lines.push("".into());
+    lines.push("# HELP asyncq_jobs_dead Jobs in the dead-letter queue".into());
+    lines.push("# TYPE asyncq_jobs_dead gauge".into());
+    for (q, st) in &all_stats {
+        lines.push(format!("asyncq_jobs_dead{{queue=\"{}\"}} {}", q, st.dead));
+    }
+
+    // completed
+    lines.push("".into());
+    lines.push("# HELP asyncq_jobs_completed Jobs completed successfully".into());
+    lines.push("# TYPE asyncq_jobs_completed counter".into());
+    for (q, st) in &all_stats {
+        lines.push(format!("asyncq_jobs_completed{{queue=\"{}\"}} {}", q, st.completed));
+    }
+
+    // version info
+    lines.push("".into());
+    lines.push("# HELP asyncq_info asyncq version info".into());
+    lines.push("# TYPE asyncq_info gauge".into());
+    lines.push(format!("asyncq_info{{version=\"{}\"}} 1", env!("CARGO_PKG_VERSION")));
+
+    lines.push("".into());
+    let body = lines.join("\n");
 
     (
         StatusCode::OK,
@@ -340,5 +404,33 @@ mod tests {
         let text = std::str::from_utf8(&body).unwrap();
         assert!(text.contains("# HELP asyncq_info"), "must include HELP comment");
         assert!(text.contains("asyncq_info{version="), "must include version gauge");
+    }
+
+    #[tokio::test]
+    async fn metrics_with_queues_shows_live_data() {
+        let backend = InMemoryBackend::new();
+        let queue = Queue::new(backend.clone());
+        let app = Router::new().nest(
+            "/admin",
+            admin_with_queues(queue.clone(), vec!["admin-test".into()]),
+        );
+
+        // Enqueue two jobs so stats are non-zero
+        queue.enqueue(TestJob).await.unwrap();
+        queue.enqueue(TestJob).await.unwrap();
+
+        let req = Request::builder()
+            .uri("/admin/metrics")
+            .body(Body::empty())
+            .unwrap();
+        let resp = call(app, req).await;
+        assert_eq!(resp.status(), StatusCode::OK);
+        let body = axum::body::to_bytes(resp.into_body(), usize::MAX).await.unwrap();
+        let text = std::str::from_utf8(&body).unwrap();
+
+        assert!(text.contains("asyncq_jobs_pending{queue=\"admin-test\"}"), "must contain pending gauge");
+        assert!(text.contains("asyncq_jobs_dead{queue=\"admin-test\"}"), "must contain dead gauge");
+        // 2 pending jobs
+        assert!(text.contains("asyncq_jobs_pending{queue=\"admin-test\"} 2"), "pending count must be 2");
     }
 }

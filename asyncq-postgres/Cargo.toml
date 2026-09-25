@@ -1,7 +1,7 @@
 [package]
 name = "asyncq-postgres"
-description = "PostgreSQL backend for asyncq — production-grade async job queue for Rust"
-keywords = ["jobs", "queue", "postgres", "background", "worker"]
+description = "PostgreSQL backend for asyncq — background jobs without Redis, transactional enqueue with SKIP LOCKED"
+keywords = ["queue", "postgres", "background", "task", "jobs"]
 categories = ["asynchronous", "web-programming", "database"]
 readme = "../README.md"
 version.workspace = true

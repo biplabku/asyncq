@@ -1,7 +1,7 @@
 [package]
 name = "asyncq"
 description = "Async background job processing for Rust — #[derive(Job)] API, Redis backend, Sidekiq/Celery-style worker"
-keywords = ["jobs", "queue", "sidekiq", "worker", "background"]
+keywords = ["queue", "sidekiq", "background", "task", "async"]
 categories = ["asynchronous", "web-programming", "database"]
 readme = "../README.md"
 version.workspace = true
@@ -23,7 +23,11 @@ thiserror.workspace = true
 async-trait.workspace = true
 tracing.workspace = true
 asyncq-derive.workspace = true
-cron = "0.17"
+cron = { version = "0.17", optional = true }
+
+[features]
+default = ["scheduler"]
+scheduler = ["dep:cron"]
 
 [dev-dependencies]
 tokio = { version = "1", features = ["full"] }

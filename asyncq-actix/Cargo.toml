@@ -1,9 +1,9 @@
 [package]
-name = "asyncq-axum"
-description = "Axum integration for asyncq — admin REST endpoints with Prometheus metrics and DLQ management"
-keywords = ["queue", "axum", "admin", "background", "metrics"]
+name = "asyncq-actix"
+description = "Actix-web integration for asyncq — admin REST endpoints with Prometheus metrics and DLQ management"
+keywords = ["queue", "actix-web", "admin", "background", "metrics"]
 categories = ["asynchronous", "web-programming"]
-readme = "../README.md"
+readme = "README.md"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true
@@ -20,9 +20,13 @@ chrono.workspace = true
 uuid.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
-axum = { version = "0.7", features = ["json"] }
-http = "1"
+actix-web = "4"
+futures.workspace = true
 
 [dev-dependencies]
+actix-web = { version = "4", features = ["macros"] }
+actix-http = "3"
+actix-rt = "2"
 tokio = { version = "1", features = ["full"] }
-tower = { version = "0.4", features = ["util"] }
+serde_json = "1"
+asyncq = { path = "../asyncq" }

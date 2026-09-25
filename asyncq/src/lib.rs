@@ -85,8 +85,10 @@ pub mod context;
 pub mod error;
 pub mod job;
 pub mod queue;
-pub mod scheduler;
 pub mod worker;
+
+#[cfg(feature = "scheduler")]
+pub mod scheduler;
 
 // Flat re-exports — everything a user needs at the top level
 pub use backend::Backend;
@@ -95,8 +97,10 @@ pub use context::JobContext;
 pub use error::{Error, JobError, JobResult, Result};
 pub use job::{Job, JobId, JobRecord, JobRecord as RawJobRecord, Perform, QueueStats};
 pub use queue::Queue;
-pub use scheduler::Scheduler;
 pub use worker::Worker;
+
+#[cfg(feature = "scheduler")]
+pub use scheduler::Scheduler;
 
 // Re-export the derive macro so users only need `use asyncq::Job`
 pub use asyncq_derive::Job;
