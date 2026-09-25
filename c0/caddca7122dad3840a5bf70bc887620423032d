@@ -1,0 +1,24 @@
+.github/workflows/ci.yml
+  s_1c23074f8afe9c::t_57af745530cfe8 1-70
+README.md
+  s_1c23074f8afe9c::t_de9e8a48d3f26b 5
+asyncq-postgres/tests/postgres_backend.rs
+  s_1c23074f8afe9c::t_bb6aa2058fd682 19
+  s_1c23074f8afe9c::t_7260e0fd10091f 11-14
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.24",
+  "base_commit_sha": "c0caddca7122dad3840a5bf70bc887620423032d",
+  "prompts": {},
+  "sessions": {
+    "s_1c23074f8afe9c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ad72de54-37db-49c0-9aa4-44e23457b173",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "Biplab Das <dasbiplabtu@gmail.com>"
+    }
+  }
+}
