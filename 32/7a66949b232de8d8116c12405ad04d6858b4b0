@@ -1,0 +1,55 @@
+asyncq-axum/src/lib.rs
+  s_1c23074f8afe9c::t_ca6f53807a5c90 47-48,55-56,58-83
+  s_1c23074f8afe9c::t_6548eab6ecd706 408-435
+  s_1c23074f8afe9c::t_f6562c0ce2c7e8 154,156-204
+README.md
+  s_1c23074f8afe9c::t_2ca96511b23d52 12-13,15,18
+  s_1c23074f8afe9c::t_86c68304507ae0 229-240,242,244-251,256-268
+  s_1c23074f8afe9c::t_4e6018b0f03158 204,208-211
+  s_1c23074f8afe9c::t_34348c40c2350f 289-296,300-301,307-330
+  s_1c23074f8afe9c::t_42972f941484b7 19
+  s_1c23074f8afe9c::t_2a6d803acae5a7 331
+asyncq/src/lib.rs
+  s_1c23074f8afe9c::t_27572cf415d5b5 90-92,102-103
+  s_1c23074f8afe9c::t_de89a64bd4acb6 104
+asyncq-derive/Cargo.toml
+  s_1c23074f8afe9c::t_d45878a72934f1 4
+asyncq-actix/Cargo.toml
+  s_1c23074f8afe9c::t_3b28d31efb75c7 28
+  s_1c23074f8afe9c::t_6cd7e4be8fee4d 1-27,29-32
+asyncq-actix/README.md
+  s_1c23074f8afe9c::t_b000e1d8df15d1 1-71
+asyncq-axum/Cargo.toml
+  s_1c23074f8afe9c::t_65a6acbf251e3d 4
+asyncq-redis/Cargo.toml
+  s_1c23074f8afe9c::t_b042418c6e2233 4
+asyncq-actix/src/lib.rs
+  s_1c23074f8afe9c::t_1e14b2a344e19c 1-290,293-299,301-404
+  s_1c23074f8afe9c::t_c0ce3a9bad7400 291,300
+  s_1c23074f8afe9c::t_ecb37680693132 292
+Cargo.toml
+  s_1c23074f8afe9c::t_254cd32f9c905e 13
+  s_1c23074f8afe9c::t_0b949410232950 8
+  s_1c23074f8afe9c::t_a322b6417880ea 46-47
+asyncq/Cargo.toml
+  s_1c23074f8afe9c::t_e3905e5c40b3c9 26-30
+  s_1c23074f8afe9c::t_d1d91cd61abb99 4
+asyncq-postgres/Cargo.toml
+  s_1c23074f8afe9c::t_71bceb39ff3c7e 3-4
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.24",
+  "base_commit_sha": "327a66949b232de8d8116c12405ad04d6858b4b0",
+  "prompts": {},
+  "sessions": {
+    "s_1c23074f8afe9c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ad72de54-37db-49c0-9aa4-44e23457b173",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "Biplab Das <dasbiplabtu@gmail.com>"
+    }
+  }
+}
