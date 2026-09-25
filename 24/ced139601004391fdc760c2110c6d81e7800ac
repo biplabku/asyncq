@@ -1,0 +1,26 @@
+asyncq-redis/tests/redis_backend.rs
+  s_1c23074f8afe9c::t_cd7231f246c3a5 276-347
+asyncq-redis/src/lib.rs
+  s_1c23074f8afe9c::t_cac430a85fa510 58-62
+  s_1c23074f8afe9c::t_6e7e084189138e 391-396,402
+  s_1c23074f8afe9c::t_f36430cc22de43 33-38
+  s_1c23074f8afe9c::t_f73ef5a45a2c6f 267-271,278-283
+Cargo.toml
+  s_1c23074f8afe9c::t_418658fea287c5 13,46-47
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.24",
+  "base_commit_sha": "24ced139601004391fdc760c2110c6d81e7800ac",
+  "prompts": {},
+  "sessions": {
+    "s_1c23074f8afe9c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ad72de54-37db-49c0-9aa4-44e23457b173",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "Biplab Das <dasbiplabtu@gmail.com>"
+    }
+  }
+}
