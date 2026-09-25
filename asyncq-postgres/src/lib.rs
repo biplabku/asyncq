@@ -108,12 +108,23 @@ impl PostgresBackend {
     }
 
     /// Create the `asyncq_jobs` table and indexes. Safe to call on every startup (idempotent).
+    ///
+    /// Concurrent callers (e.g. parallel test setup) are safe: if two callers
+    /// race on `CREATE TABLE`, the losing transaction gets a `unique_violation`
+    /// (Postgres error 23505) from the internal `pg_type` catalog. The schema
+    /// exists either way, so that specific error is treated as success.
     pub async fn migrate(&self) -> Result<()> {
-        sqlx::raw_sql(MIGRATION_SQL)
-            .execute(&self.pool)
-            .await
-            .map_err(|e| Error::Backend(format!("migration failed: {e}")))?;
-        Ok(())
+        match sqlx::raw_sql(MIGRATION_SQL).execute(&self.pool).await {
+            Ok(_) => Ok(()),
+            Err(e) => {
+                if let Some(db_err) = e.as_database_error() {
+                    if db_err.code().as_deref() == Some("23505") {
+                        return Ok(());
+                    }
+                }
+                Err(Error::Backend(format!("migration failed: {e}")))
+            }
+        }
     }
 
     /// Enqueue a job inside an existing transaction (transactional outbox pattern).
