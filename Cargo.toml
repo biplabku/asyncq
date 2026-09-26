@@ -10,7 +10,7 @@ members = [
 resolver = "2"
 
 [workspace.package]
-version = "0.1.7"
+version = "0.1.8"
 edition = "2021"
 authors = ["Biplab Das <dasbiplabtu@gmail.com>"]
 license = "MIT OR Apache-2.0"
@@ -43,5 +43,5 @@ async-trait = "0.1"
 tracing = "0.1"
 
 # Internal crates
-asyncq = { path = "asyncq", version = "0.1.7" }
-asyncq-derive = { path = "asyncq-derive", version = "0.1.7" }
+asyncq = { path = "asyncq", version = "0.1.8" }
+asyncq-derive = { path = "asyncq-derive", version = "0.1.8" }
