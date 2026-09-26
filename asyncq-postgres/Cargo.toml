@@ -26,4 +26,14 @@ sqlx = { version = "0.8", features = ["postgres", "uuid", "chrono", "runtime-tok
 [dev-dependencies]
 tokio = { version = "1", features = ["full"] }
 tracing-subscriber = "0.3"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
 sqlx = { version = "0.8", features = ["postgres", "uuid", "chrono", "runtime-tokio"] }
+
+[[example]]
+name = "basic"
+path = "examples/basic.rs"
+
+[[example]]
+name = "transactional_outbox"
+path = "examples/transactional_outbox.rs"
