@@ -1,0 +1,23 @@
+asyncq-postgres/Cargo.toml
+  s_1c23074f8afe9c::t_aaf599e4111b1d 29-30,32-39
+asyncq-postgres/examples/transactional_outbox.rs
+  s_1c23074f8afe9c::t_b04f7f576782e1 1-126
+asyncq-postgres/examples/basic.rs
+  s_1c23074f8afe9c::t_3132fa5f5f0a72 1-56
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.24",
+  "base_commit_sha": "89f7510f2d431200588aeacb288bf142746b0fb2",
+  "prompts": {},
+  "sessions": {
+    "s_1c23074f8afe9c": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ad72de54-37db-49c0-9aa4-44e23457b173",
+        "model": "claude-sonnet-4-6"
+      },
+      "human_author": "Biplab Das <dasbiplabtu@gmail.com>"
+    }
+  }
+}
