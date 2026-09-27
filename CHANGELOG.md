@@ -11,7 +11,7 @@ versioned and released together. There are no git tags in this repository yet,
 so entries below are reconstructed from commit history rather than linked to
 tagged ranges.
 
-## [Unreleased]
+## [0.1.9] - 2026-09-27
 
 ### Fixed
 - `documentation` link in `asyncq-derive`, `asyncq-redis`, `asyncq-axum`,
@@ -33,7 +33,15 @@ tagged ranges.
   runnable examples mounting the admin API over `InMemoryBackend`.
 - Architecture diagram in the root README showing how the core crate, storage
   backends, and framework integrations fit together.
+- `LICENSE-MIT` / `LICENSE-APACHE` — `Cargo.toml` declared `MIT OR Apache-2.0`
+  but no license files existed in the repository.
 - This CHANGELOG.
+
+### Internal
+- Removed dead capture-variable setup in an `asyncq` test that didn't
+  actually exercise anything, and fixed `uninlined_format_args`
+  clippy lints in `asyncq-redis` test files — both caught by
+  `cargo clippy --workspace --all-targets`, which CI doesn't run.
 
 ## [0.1.8] - 2026-09-25
 
