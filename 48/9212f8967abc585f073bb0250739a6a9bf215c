@@ -1,0 +1,67 @@
+asyncq-postgres/tests/postgres_backend.rs
+  s_42bd59ebdf91fb::t_79054b3c8471bf 13
+  s_42bd59ebdf91fb::t_6b2ccb80498658 2
+asyncq-postgres/Cargo.toml
+  s_42bd59ebdf91fb::t_10a73fa2b80514 12
+  s_42bd59ebdf91fb::t_3ca24a2894e622 14-15
+  s_42bd59ebdf91fb::t_e8df141dfa5b43 13
+asyncq-actix/Cargo.toml
+  s_42bd59ebdf91fb::t_a9e38033a5faf8 14-15
+  s_42bd59ebdf91fb::t_1fd9c95aa087e2 12
+  s_42bd59ebdf91fb::t_a79f10395fdf74 36-39
+  s_42bd59ebdf91fb::t_b76596bb88e659 13
+asyncq/Cargo.toml
+  s_42bd59ebdf91fb::t_930ecfdf94a501 15-17
+CHANGELOG.md
+  s_42bd59ebdf91fb::t_2a04230d65e63b 10-12,53-59,77-86,104-105,112-118,121-122,130-132
+  s_42bd59ebdf91fb::t_4a9537d7bb6704 21-27
+  s_42bd59ebdf91fb::t_2515fd23d55562 1-9,13-20,28-52,60-76,87-103,106-111,119-120,123-129,133-154
+asyncq-redis/tests/redis_backend.rs
+  s_42bd59ebdf91fb::t_c32a9e59dd17bd 29,288,326
+  s_42bd59ebdf91fb::t_64b88c8b4bc60f 286,324
+  s_42bd59ebdf91fb::t_5cb7964e24ebb6 12-14,20
+  s_42bd59ebdf91fb::t_77c29feb10d9f6 26
+asyncq-redis/Cargo.toml
+  s_42bd59ebdf91fb::t_8fd3c6515ebaa8 14-15
+  s_42bd59ebdf91fb::t_16d586e5553b76 12
+  s_42bd59ebdf91fb::t_179ba89bc2da02 13
+asyncq-derive/Cargo.toml
+  s_42bd59ebdf91fb::t_79cbc3930d78d7 14-15
+  s_42bd59ebdf91fb::t_2019f85dbdd756 12
+  s_42bd59ebdf91fb::t_49ee8c359127e1 13
+asyncq-axum/Cargo.toml
+  s_42bd59ebdf91fb::t_6c77d77e63a748 32-35
+  s_42bd59ebdf91fb::t_621589a4663496 12
+  s_42bd59ebdf91fb::t_0ee55a3a98f33c 14-15
+  s_42bd59ebdf91fb::t_4438c88d8c7e82 13
+asyncq-actix/examples/admin_server.rs
+  s_42bd59ebdf91fb::t_fee21a5440a53f 1-61
+asyncq-redis/tests/e2e_full.rs
+  s_42bd59ebdf91fb::t_3488ab791a3141 23
+  s_42bd59ebdf91fb::t_900435ad35e1ce 70,82,117
+  s_42bd59ebdf91fb::t_2d10567698c67b 12-14,20
+asyncq-axum/examples/admin_server.rs
+  s_42bd59ebdf91fb::t_1abcd6e4fc5571 1-55
+LICENSE-APACHE
+  s_42bd59ebdf91fb::t_bc2ead71dd0641 1-190
+LICENSE-MIT
+  s_42bd59ebdf91fb::t_adf3e158cb6ec7 1-21
+README.md
+  s_42bd59ebdf91fb::t_202a588a8deee9 6,205-251
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.24",
+  "base_commit_sha": "489212f8967abc585f073bb0250739a6a9bf215c",
+  "prompts": {},
+  "sessions": {
+    "s_42bd59ebdf91fb": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "98a71a5a-0f40-479b-a3f5-a4dd65dce633",
+        "model": "claude-sonnet-5"
+      },
+      "human_author": "Biplab Das <dasbiplabtu@gmail.com>"
+    }
+  }
+}
