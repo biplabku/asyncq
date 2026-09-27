@@ -1,5 +1,5 @@
 //! E2E tests against a real PostgreSQL instance.
-//! Requires: postgres://hooksmith:hooksmith@localhost/hooksmith
+//! Requires: postgres://asyncq:asyncq@localhost/asyncq (override with DATABASE_URL)
 //! Each test uses a unique queue name to avoid parallel interference.
 
 use asyncq::{Job, JobContext, JobError, JobResult, JobRecord, Perform, Queue, Worker};
@@ -10,7 +10,7 @@ use uuid::Uuid;
 
 fn db_url() -> String {
     std::env::var("DATABASE_URL")
-        .unwrap_or_else(|_| "postgres://hooksmith:hooksmith@localhost/hooksmith".to_string())
+        .unwrap_or_else(|_| "postgres://asyncq:asyncq@localhost/asyncq".to_string())
 }
 
 fn uq(tag: &str) -> String { format!("pgtest-{tag}-{}", Uuid::new_v4().simple()) }

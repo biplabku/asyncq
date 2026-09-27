@@ -274,11 +274,6 @@ async fn context_has_correct_metadata() {
     #[job(queue = "meta_queue", retries = 1)]
     struct MetaJob;
 
-    let captured = Arc::new(Mutex::new(Option::<(u32, String)>::None));
-    let cap2 = Arc::clone(&captured);
-
-    // We need a closure-based job since we can't capture state into impl Perform.
-    // Instead, use state to capture.
     impl Perform for MetaJob {
         async fn perform(self, ctx: JobContext) -> JobResult {
             // Just verify the fields exist and have sane values

@@ -12,6 +12,9 @@ repository.workspace = true
 documentation.workspace = true
 rust-version.workspace = true
 
+[package.metadata.docs.rs]
+all-features = true
+
 [dependencies]
 tokio.workspace = true
 futures.workspace = true

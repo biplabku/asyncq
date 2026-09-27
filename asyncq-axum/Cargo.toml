@@ -9,7 +9,10 @@ edition.workspace = true
 authors.workspace = true
 license.workspace = true
 repository.workspace = true
-documentation.workspace = true
+documentation = "https://docs.rs/asyncq-axum"
+
+[package.metadata.docs.rs]
+all-features = true
 
 [dependencies]
 asyncq.workspace = true
@@ -26,3 +29,7 @@ http = "1"
 [dev-dependencies]
 tokio = { version = "1", features = ["full"] }
 tower = { version = "0.4", features = ["util"] }
+
+[[example]]
+name = "admin_server"
+path = "examples/admin_server.rs"

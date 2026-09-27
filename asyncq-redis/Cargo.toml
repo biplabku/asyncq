@@ -9,7 +9,10 @@ edition.workspace = true
 authors.workspace = true
 license.workspace = true
 repository.workspace = true
-documentation.workspace = true
+documentation = "https://docs.rs/asyncq-redis"
+
+[package.metadata.docs.rs]
+all-features = true
 
 [dependencies]
 asyncq.workspace = true

@@ -3,7 +3,7 @@
 [![Crates.io](https://img.shields.io/crates/v/asyncq.svg)](https://crates.io/crates/asyncq)
 [![Documentation](https://docs.rs/asyncq/badge.svg)](https://docs.rs/asyncq)
 [![CI](https://github.com/biplabku/asyncq/actions/workflows/ci.yml/badge.svg)](https://github.com/biplabku/asyncq/actions/workflows/ci.yml)
-[![License](https://img.shields.io/crates/l/asyncq.svg)](LICENSE)
+[![License](https://img.shields.io/crates/l/asyncq.svg)](LICENSE-MIT)
 
 **Type-safe background jobs for Rust.** Define once with `#[derive(Job)]`, run anywhere.
 
@@ -201,6 +201,53 @@ queue.retry_all_dead("payments").await?;       // retry all
 let stats = queue.stats("emails").await?;
 println!("pending={} running={} dead={}", stats.pending, stats.running, stats.dead);
 ```
+
+## Architecture
+
+`asyncq` itself defines the job model (`Job`, `Perform`, `Worker`, `Queue<B>`)
+and is generic over a storage `Backend`. A backend crate (Redis or Postgres)
+implements that trait to give you durable storage; an integration crate
+(axum or actix-web) mounts an admin API on top of the same `Queue<B>` your
+worker uses. Enqueue and worker processes both talk to the same backend, so
+they can be the same binary or split across services.
+
+```mermaid
+flowchart LR
+    subgraph App["Your application"]
+        Producer["Producer<br/>queue.enqueue(job)"]
+        WorkerNode["Worker<br/>register + run()"]
+    end
+
+    subgraph Core["asyncq (core)"]
+        QueueT["Queue&lt;B&gt;<br/>generic over Backend"]
+        JobTrait["Job / Perform / JobContext"]
+    end
+
+    subgraph Store["Storage backend (pick one)"]
+        Redis["asyncq-redis<br/>ZSET + LIST"]
+        Postgres["asyncq-postgres<br/>SKIP LOCKED"]
+    end
+
+    subgraph Admin["Framework integration (optional)"]
+        Axum["asyncq-axum<br/>admin_with_queues()"]
+        Actix["asyncq-actix<br/>admin_with_queues()"]
+    end
+
+    Producer -->|enqueue / enqueue_in / enqueue_at| QueueT
+    QueueT -->|claim / ack / nack| Redis
+    QueueT -->|claim / ack / nack| Postgres
+    Redis -->|pending jobs| WorkerNode
+    Postgres -->|pending jobs| WorkerNode
+    WorkerNode -->|perform| JobTrait
+
+    QueueT -. stats / dlq / retry .-> Axum
+    QueueT -. stats / dlq / retry .-> Actix
+```
+
+Enqueue writes a job record into the backend; the worker polls (or blocks on)
+the same backend to claim jobs, executes `Perform::perform`, and acks or
+retries/dead-letters on failure. The admin crates read and mutate that same
+`Queue<B>` over HTTP — they don't add a second source of truth.
 
 ## Backends and integrations
 

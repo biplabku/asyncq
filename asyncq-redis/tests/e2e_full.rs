@@ -9,16 +9,18 @@ use serde::{Deserialize, Serialize};
 use std::sync::{Arc, Mutex};
 use uuid::Uuid;
 
-const REDIS_URL: &str = "redis://127.0.0.1/";
+fn redis_url() -> String {
+    std::env::var("REDIS_URL").unwrap_or_else(|_| "redis://127.0.0.1/".to_string())
+}
 
 fn uq(tag: &str) -> String { format!("e2e-{tag}-{}", Uuid::new_v4().simple()) }
 
 async fn clean(queue: &str) {
     use redis::AsyncCommands;
-    if let Ok(client) = redis::Client::open(REDIS_URL) {
+    if let Ok(client) = redis::Client::open(redis_url()) {
         if let Ok(mut c) = client.get_multiplexed_async_connection().await {
             for s in &["pending", "delayed", "dead"] {
-                let _: Result<(), _> = c.del(format!("asyncq:q:{}:{s}", queue)).await;
+                let _: Result<(), _> = c.del(format!("asyncq:q:{queue}:{s}")).await;
             }
         }
     }
@@ -65,7 +67,7 @@ async fn e2e_handler_enqueues_worker_processes() {
     clean(&q).await;
 
     let db = Arc::new(AppDb::default());
-    let backend = RedisBackend::new(REDIS_URL).await.unwrap();
+    let backend = RedisBackend::new(&redis_url()).await.unwrap();
     let queue = Queue::new(backend.clone()).with_state(Arc::clone(&db));
 
     // Simulate 3 HTTP requests hitting the handler
@@ -77,7 +79,7 @@ async fn e2e_handler_enqueues_worker_processes() {
         "jobs were enqueued to 'e2e-orders', not the unique test queue");
 
     // Use enqueue_record to put them in the unique test queue for isolation
-    let backend2 = RedisBackend::new(REDIS_URL).await.unwrap();
+    let backend2 = RedisBackend::new(&redis_url()).await.unwrap();
     let q2 = Queue::new(backend2.clone()).with_state(Arc::clone(&db));
 
     for i in 1u64..=3 {
@@ -112,7 +114,7 @@ async fn e2e_concurrent_enqueue_and_process() {
     clean(&q).await;
 
     let db = Arc::new(AppDb::default());
-    let backend = RedisBackend::new(REDIS_URL).await.unwrap();
+    let backend = RedisBackend::new(&redis_url()).await.unwrap();
 
     // Enqueue 20 jobs concurrently
     let enqueue_tasks: Vec<_> = (0u64..20)

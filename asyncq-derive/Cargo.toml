@@ -9,7 +9,10 @@ edition.workspace = true
 authors.workspace = true
 license.workspace = true
 repository.workspace = true
-documentation.workspace = true
+documentation = "https://docs.rs/asyncq-derive"
+
+[package.metadata.docs.rs]
+all-features = true
 
 [lib]
 proc-macro = true

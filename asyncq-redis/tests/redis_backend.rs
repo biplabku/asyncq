@@ -9,22 +9,24 @@ use std::sync::{Arc, Mutex};
 use uuid::Uuid;
 use chrono::{Utc, Duration as ChronoDur};
 
-const REDIS_URL: &str = "redis://127.0.0.1/";
+fn redis_url() -> String {
+    std::env::var("REDIS_URL").unwrap_or_else(|_| "redis://127.0.0.1/".to_string())
+}
 
 /// Unique queue prefix per test call — no parallel interference.
 fn uq(tag: &str) -> String { format!("t-{tag}-{}", Uuid::new_v4().simple()) }
 
 async fn backend() -> RedisBackend {
-    RedisBackend::new(REDIS_URL).await.expect("Redis must be running on localhost:6379")
+    RedisBackend::new(&redis_url()).await.expect("Redis must be running (see REDIS_URL)")
 }
 
 /// Best-effort cleanup of all asyncq keys for a queue.
 async fn cleanup(queue: &str) {
     use redis::AsyncCommands;
-    if let Ok(client) = redis::Client::open(REDIS_URL) {
+    if let Ok(client) = redis::Client::open(redis_url()) {
         if let Ok(mut c) = client.get_multiplexed_async_connection().await {
             for suffix in &["pending", "delayed", "dead"] {
-                let _: Result<(), _> = c.del(format!("asyncq:q:{}:{}", queue, suffix)).await;
+                let _: Result<(), _> = c.del(format!("asyncq:q:{queue}:{suffix}")).await;
             }
         }
     }
@@ -281,9 +283,9 @@ async fn redis_completed_counter_increments_on_success() {
     // Also clean the completed counter key
     {
         use redis::AsyncCommands;
-        if let Ok(client) = redis::Client::open(REDIS_URL) {
+        if let Ok(client) = redis::Client::open(redis_url()) {
             if let Ok(mut c) = client.get_multiplexed_async_connection().await {
-                let _: Result<(), _> = c.del(format!("asyncq:q:{}:completed", q)).await;
+                let _: Result<(), _> = c.del(format!("asyncq:q:{q}:completed")).await;
             }
         }
     }
@@ -319,9 +321,9 @@ async fn redis_completed_counter_not_incremented_on_discard() {
     cleanup(&q).await;
     {
         use redis::AsyncCommands;
-        if let Ok(client) = redis::Client::open(REDIS_URL) {
+        if let Ok(client) = redis::Client::open(redis_url()) {
             if let Ok(mut c) = client.get_multiplexed_async_connection().await {
-                let _: Result<(), _> = c.del(format!("asyncq:q:{}:completed", q)).await;
+                let _: Result<(), _> = c.del(format!("asyncq:q:{q}:completed")).await;
             }
         }
     }
