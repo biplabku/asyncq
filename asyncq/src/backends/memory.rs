@@ -1,4 +1,6 @@
 use std::collections::{HashMap, VecDeque};
+
+const REAPED_EXHAUSTED: &str = "worker stopped heartbeating; attempts exhausted";
 use std::sync::Arc;
 use std::time::Duration;
 use chrono::{DateTime, Utc};
@@ -107,6 +109,15 @@ impl InMemoryBackend {
     }
 
     /// Number of pending (not yet claimed) jobs in a queue.
+    /// True if `id` is running under the claim made at `attempt`.
+    /// (Check-then-act is safe enough here: tests drive this backend, and the
+    /// worker never reaps and acks the same job concurrently in one process.)
+    async fn owns(&self, id: JobId, attempt: u32) -> bool {
+        let lock = self.queues.lock().await;
+        lock.values()
+            .any(|q| q.running.get(&id).is_some_and(|(r, _)| r.attempt == attempt))
+    }
+
     pub async fn pending_count(&self, queue: &str) -> usize {
         self.queues.lock().await
             .get(queue)
@@ -199,6 +210,26 @@ impl Backend for InMemoryBackend {
         Err(Error::NotFound(id.to_string()))
     }
 
+    async fn ack_claim(&self, id: JobId, attempt: u32) -> Result<bool> {
+        if !self.owns(id, attempt).await {
+            return Ok(false);
+        }
+        self.ack(id).await.map(|_| true)
+    }
+
+    async fn nack_claim(
+        &self,
+        id: JobId,
+        attempt: u32,
+        error: &str,
+        retry_at: Option<DateTime<Utc>>,
+    ) -> Result<bool> {
+        if !self.owns(id, attempt).await {
+            return Ok(false);
+        }
+        self.nack(id, error, retry_at).await.map(|_| true)
+    }
+
     async fn heartbeat(&self, id: JobId) -> Result<()> {
         let mut lock = self.queues.lock().await;
         for q in lock.values_mut() {
@@ -223,10 +254,16 @@ impl Backend for InMemoryBackend {
                 .collect();
             for id in stuck {
                 if let Some((mut record, _)) = q.running.remove(&id) {
-                    // Reset to pending for re-processing
-                    record.scheduled_at = Utc::now();
-                    q.pending.push_back(record);
                     count += 1;
+                    // The dead worker's attempt counts; without this a job that
+                    // crashes its worker is retried forever.
+                    if record.attempt >= record.max_attempts {
+                        record.last_error = Some(REAPED_EXHAUSTED.to_owned());
+                        q.dead.push(record);
+                    } else {
+                        record.scheduled_at = Utc::now();
+                        q.pending.push_back(record);
+                    }
                 }
             }
         }

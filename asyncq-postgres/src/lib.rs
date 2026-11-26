@@ -262,8 +262,46 @@ impl Backend for PostgresBackend {
         Ok(())
     }
 
+    async fn ack_claim(&self, id: JobId, attempt: u32) -> Result<bool> {
+        let r = sqlx::query(
+            "UPDATE asyncq_jobs SET status = 'completed'
+             WHERE id = $1 AND attempt = $2 AND status = 'running'",
+        )
+        .bind(id)
+        .bind(attempt as i32)
+        .execute(&self.pool)
+        .await
+        .map_err(|e| Error::Backend(e.to_string()))?;
+        Ok(r.rows_affected() == 1)
+    }
+
+    async fn nack_claim(
+        &self,
+        id: JobId,
+        attempt: u32,
+        error: &str,
+        retry_at: Option<DateTime<Utc>>,
+    ) -> Result<bool> {
+        // retry_at NULL → dead-letter; otherwise reschedule. Only if this claim still owns it.
+        let r = sqlx::query(
+            r#"UPDATE asyncq_jobs
+               SET status = CASE WHEN $4::timestamptz IS NULL THEN 'dead' ELSE 'pending' END,
+                   scheduled_at = COALESCE($4, scheduled_at),
+                   last_error = $3, heartbeat_at = NULL
+               WHERE id = $1 AND attempt = $2 AND status = 'running'"#,
+        )
+        .bind(id)
+        .bind(attempt as i32)
+        .bind(error)
+        .bind(retry_at)
+        .execute(&self.pool)
+        .await
+        .map_err(|e| Error::Backend(e.to_string()))?;
+        Ok(r.rows_affected() == 1)
+    }
+
     async fn heartbeat(&self, id: JobId) -> Result<()> {
-        sqlx::query("UPDATE asyncq_jobs SET heartbeat_at = NOW() WHERE id = $1")
+        sqlx::query("UPDATE asyncq_jobs SET heartbeat_at = NOW() WHERE id = $1 AND status = 'running'")
             .bind(id)
             .execute(&self.pool)
             .await
@@ -276,7 +314,11 @@ impl Backend for PostgresBackend {
             - chrono::Duration::from_std(older_than).unwrap_or(chrono::Duration::seconds(120));
         let result = sqlx::query(
             r#"UPDATE asyncq_jobs
-               SET status = 'pending', heartbeat_at = NULL
+               SET status = CASE WHEN attempt >= max_attempts THEN 'dead' ELSE 'pending' END,
+                   last_error = CASE WHEN attempt >= max_attempts
+                                     THEN 'worker stopped heartbeating; attempts exhausted'
+                                     ELSE last_error END,
+                   heartbeat_at = NULL
                WHERE status = 'running' AND heartbeat_at < $1"#,
         )
         .bind(cutoff)

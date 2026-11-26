@@ -151,7 +151,7 @@ impl<B: Backend> Worker<B> {
 
                     tokio::spawn(async move {
                         let _permit = permit;
-                        run_job(record, handlers2, state2, backend2).await;
+                        run_job(record, handlers2, state2, backend2, heartbeat_every(stuck_timeout)).await;
                     });
                 }
                 Ok(None) => {} // poll timeout — loop again
@@ -211,6 +211,7 @@ impl<B: Backend> Worker<B> {
                 Arc::clone(&handlers),
                 Arc::clone(&state),
                 Arc::clone(&backend),
+                heartbeat_every(stuck_timeout),
             )
             .await;
         }
@@ -225,6 +226,7 @@ async fn run_job<B: Backend>(
     handlers: Arc<HashMap<String, Arc<BoxedHandler>>>,
     state: Arc<dyn std::any::Any + Send + Sync>,
     backend: Arc<B>,
+    heartbeat_interval: Duration,
 ) {
     let job_id = record.id;
     let kind = record.kind.clone();
@@ -239,44 +241,77 @@ async fn run_job<B: Backend>(
         Some(h) => Arc::clone(h),
         None => {
             tracing::error!(kind, "no handler registered for job kind — sending to DLQ");
-            let _ = backend.nack(job_id, "no handler registered", None).await;
+            let _ = backend.nack_claim(job_id, attempt, "no handler registered", None).await;
             return;
         }
     };
 
+    // Keep the claim alive while the job runs. Without this, any job that runs
+    // longer than `stuck_timeout` is reaped and executed again concurrently.
+    let hb_backend = Arc::clone(&backend);
+    let heartbeat = tokio::spawn(async move {
+        let mut tick = tokio::time::interval(heartbeat_interval);
+        tick.tick().await; // first tick fires immediately; claim just set the timestamp
+        loop {
+            tick.tick().await;
+            if let Err(e) = hb_backend.heartbeat(job_id).await {
+                tracing::warn!(%job_id, error = %e, "failed to send job heartbeat");
+            }
+        }
+    });
+
     let result = handler(record, ctx).await;
+    heartbeat.abort();
 
     match result {
         Ok(()) => {
             tracing::debug!(%job_id, %kind, attempt, "job completed");
-            if let Err(e) = backend.ack(job_id).await {
-                tracing::error!(%job_id, error = %e, "failed to ack job");
+            match backend.ack_claim(job_id, attempt).await {
+                Ok(true) => {}
+                Ok(false) => stale_claim(job_id, attempt),
+                Err(e) => tracing::error!(%job_id, error = %e, "failed to ack job"),
             }
         }
         Err(JobError::Discard(msg)) => {
             tracing::warn!(%job_id, %kind, attempt, error = %msg, "job discarded — sending to DLQ");
-            if let Err(e) = backend.nack(job_id, &msg, None).await {
-                tracing::error!(%job_id, error = %e, "failed to nack (discard) job");
+            match backend.nack_claim(job_id, attempt, &msg, None).await {
+                Ok(true) => {}
+                Ok(false) => stale_claim(job_id, attempt),
+                Err(e) => tracing::error!(%job_id, error = %e, "failed to nack (discard) job"),
             }
         }
         Err(JobError::Retry(msg)) => {
             if attempt >= max_attempts {
                 tracing::warn!(%job_id, %kind, attempt, max_attempts, error = %msg,
                     "job exhausted retries — sending to DLQ");
-                if let Err(e) = backend.nack(job_id, &msg, None).await {
-                    tracing::error!(%job_id, error = %e, "failed to nack (dead) job");
+                match backend.nack_claim(job_id, attempt, &msg, None).await {
+                    Ok(true) => {}
+                    Ok(false) => stale_claim(job_id, attempt),
+                    Err(e) => tracing::error!(%job_id, error = %e, "failed to nack (dead) job"),
                 }
             } else {
                 let retry_at = next_retry_at(attempt);
                 tracing::warn!(%job_id, %kind, attempt, error = %msg,
                     retry_in_secs = (retry_at - chrono::Utc::now()).num_seconds(),
                     "job failed — scheduling retry");
-                if let Err(e) = backend.nack(job_id, &msg, Some(retry_at)).await {
-                    tracing::error!(%job_id, error = %e, "failed to nack (retry) job");
+                match backend.nack_claim(job_id, attempt, &msg, Some(retry_at)).await {
+                    Ok(true) => {}
+                    Ok(false) => stale_claim(job_id, attempt),
+                    Err(e) => tracing::error!(%job_id, error = %e, "failed to nack (retry) job"),
                 }
             }
         }
     }
+}
+
+fn stale_claim(job_id: JobId, attempt: u32) {
+    tracing::warn!(%job_id, attempt,
+        "claim lost (job was reaped and re-claimed while this worker ran it); result ignored");
+}
+
+/// Heartbeat at a third of the stuck timeout, so two missed beats still leave margin.
+fn heartbeat_every(stuck_timeout: Duration) -> Duration {
+    (stuck_timeout / 3).max(Duration::from_millis(10))
 }
 
 /// Exponential backoff with jitter: base_delay * 2^attempt, capped at 1 hour.

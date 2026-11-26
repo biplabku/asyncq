@@ -47,6 +47,29 @@ pub trait Backend: Send + Sync + 'static {
     ///
     /// Called periodically by the worker to prevent the job from being
     /// reclaimed by another worker if it's taking a long time.
+    /// Acknowledge only if the claim made at `attempt` still owns the job.
+    ///
+    /// Returns `Ok(false)` when the job was reaped and re-claimed in the
+    /// meantime (e.g. the worker paused past the stuck timeout), so a stale
+    /// worker cannot complete a job another worker is now running.
+    /// The default is unfenced, for backends that don't support it.
+    async fn ack_claim(&self, id: JobId, attempt: u32) -> Result<bool> {
+        let _ = attempt;
+        self.ack(id).await.map(|_| true)
+    }
+
+    /// `nack` fenced the same way as [`Backend::ack_claim`].
+    async fn nack_claim(
+        &self,
+        id: JobId,
+        attempt: u32,
+        error: &str,
+        retry_at: Option<DateTime<Utc>>,
+    ) -> Result<bool> {
+        let _ = attempt;
+        self.nack(id, error, retry_at).await.map(|_| true)
+    }
+
     async fn heartbeat(&self, id: JobId) -> Result<()>;
 
     /// Reset jobs that have been running longer than `older_than` back to pending.

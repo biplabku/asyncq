@@ -68,6 +68,16 @@ const KEY_PROCESSING: &str = "asyncq:processing";
 ///
 /// Uses a connection manager for automatic reconnect and connection pooling.
 /// All operations are atomic via Redis commands and Lua scripts where needed.
+/// Atomically: if the job's attempt still matches and it is still in processing,
+/// remove it from processing (so no reaper can take it) and return 1.
+const TAKE_CLAIM_LUA: &str = r#"
+if redis.call('HGET', KEYS[2], 'attempt') == ARGV[2]
+   and redis.call('ZREM', KEYS[1], ARGV[1]) == 1 then
+  return 1
+end
+return 0
+"#;
+
 #[derive(Clone)]
 pub struct RedisBackend {
     conn: ConnectionManager,
@@ -76,6 +86,20 @@ pub struct RedisBackend {
 impl RedisBackend {
     /// Connect to Redis at `url` (e.g. `"redis://127.0.0.1/"` or
     /// `"redis://:password@host:6379/0"`).
+    /// Fence for ack/nack: succeeds for exactly one of {this worker, a reaper}.
+    async fn take_claim(&self, id: JobId, attempt: u32) -> Result<bool> {
+        let mut conn = self.conn.clone();
+        let won: i64 = redis::Script::new(TAKE_CLAIM_LUA)
+            .key(KEY_PROCESSING)
+            .key(key_job(id))
+            .arg(id.to_string())
+            .arg(attempt.to_string())
+            .invoke_async(&mut conn)
+            .await
+            .map_err(|e| Error::Backend(e.to_string()))?;
+        Ok(won == 1)
+    }
+
     pub async fn new(url: &str) -> Result<Self> {
         let client = Client::open(url)
             .map_err(|e| Error::Backend(e.to_string()))?;
@@ -330,10 +354,36 @@ impl Backend for RedisBackend {
         Ok(())
     }
 
+    async fn ack_claim(&self, id: JobId, attempt: u32) -> Result<bool> {
+        if !self.take_claim(id, attempt).await? {
+            return Ok(false);
+        }
+        self.ack(id).await.map(|_| true)
+    }
+
+    async fn nack_claim(
+        &self,
+        id: JobId,
+        attempt: u32,
+        error: &str,
+        retry_at: Option<DateTime<Utc>>,
+    ) -> Result<bool> {
+        if !self.take_claim(id, attempt).await? {
+            return Ok(false);
+        }
+        self.nack(id, error, retry_at).await.map(|_| true)
+    }
+
     async fn heartbeat(&self, id: JobId) -> Result<()> {
         let mut conn = self.conn.clone();
         let now = Utc::now().timestamp();
-        conn.zadd::<_, _, _, ()>(KEY_PROCESSING, id.to_string(), now)
+        // XX: only refresh jobs still in processing; never re-add a reaped/acked job.
+        redis::cmd("ZADD")
+            .arg(KEY_PROCESSING)
+            .arg("XX")
+            .arg(now)
+            .arg(id.to_string())
+            .query_async::<()>(&mut conn)
             .await
             .map_err(|e| Error::Backend(e.to_string()))?;
         Ok(())
@@ -348,24 +398,34 @@ impl Backend for RedisBackend {
             .await
             .map_err(|e| Error::Backend(e.to_string()))?;
 
-        let count = stuck_ids.len() as u64;
+        let mut count = 0u64;
         for id_str in stuck_ids {
             let id = match Uuid::parse_str(&id_str) {
                 Ok(id) => id,
                 Err(_) => continue,
             };
-            // Remove from processing
-            conn.zrem::<_, _, ()>(KEY_PROCESSING, &id_str)
+            // Remove from processing. Every worker runs the reaper, so only the one
+            // whose ZREM actually removed the entry may re-enqueue; otherwise two
+            // reapers push the same job twice and it runs twice concurrently.
+            let removed: i64 = conn
+                .zrem(KEY_PROCESSING, &id_str)
                 .await
                 .map_err(|e| Error::Backend(e.to_string()))?;
+            if removed == 0 {
+                continue;
+            }
+            count += 1;
 
-            // Reset attempt count and re-enqueue
-            if let Some(mut record) = self.load_job(id).await? {
-                if record.attempt > 0 { record.attempt -= 1; }
+            // The dead worker's attempt counts (previously it was subtracted, so a
+            // job that crashes its worker was retried forever and never dead-lettered).
+            if let Some(record) = self.load_job(id).await? {
+                if record.attempt >= record.max_attempts {
+                    self.nack(id, "worker stopped heartbeating; attempts exhausted", None).await?;
+                    continue;
+                }
                 let now_ts = Utc::now().timestamp();
                 redis::cmd("HSET")
                     .arg(key_job(id))
-                    .arg("attempt").arg(record.attempt)
                     .arg("scheduled_at").arg(now_ts)
                     .query_async::<()>(&mut conn)
                     .await
