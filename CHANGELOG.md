@@ -11,6 +11,24 @@ versioned and released together. There are no git tags in this repository yet,
 so entries below are reconstructed from commit history rather than linked to
 tagged ranges.
 
+## [0.2.1] - 2026-11-26
+
+### Fixed
+- Redis: every state transition that moves a job between structures ran as
+  several separate commands, so a worker killed between them could leave the
+  job in no structure at all, where nothing would ever run it again. Found by
+  killing workers every 0.2 s under steady load (0.2.0 lost 23 of 24,000 jobs
+  across 1,200 kills). Each transition is now a single Lua script:
+  - `claim`: pop from pending, bump `attempt`, add to processing. `claim` polls
+    the script (at most every 100 ms) instead of using `BRPOP`, since a
+    blocking pop can't run inside a script.
+  - `reap_stuck`: remove from processing and re-enqueue or dead-letter.
+  - `ack` / `ack_claim` and `nack` / `nack_claim`: the attempt fence and the
+    state change now happen together.
+  - delayed-job promotion: remove from delayed and push to pending.
+- `RedisBackend`'s doc comment had ended up on a private constant in 0.2.0, so
+  docs.rs showed the type without a description.
+
 ## [0.2.0] - 2026-11-25
 
 ### Fixed
