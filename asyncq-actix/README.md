@@ -4,9 +4,9 @@ Actix-web integration for [asyncq](https://crates.io/crates/asyncq) — admin RE
 
 ```toml
 [dependencies]
-asyncq-actix = "0.1"
-asyncq = "0.1"
-asyncq-redis = "0.1"  # or asyncq-postgres
+asyncq-actix = "0.2"
+asyncq = "0.2"
+asyncq-redis = "0.2"  # or asyncq-postgres
 ```
 
 ## Usage

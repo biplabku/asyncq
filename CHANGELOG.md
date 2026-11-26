@@ -11,6 +11,30 @@ versioned and released together. There are no git tags in this repository yet,
 so entries below are reconstructed from commit history rather than linked to
 tagged ranges.
 
+## [0.2.0] - 2026-11-25
+
+### Fixed
+- Workers never sent heartbeats while a job ran, so any job longer than
+  `stuck_timeout` (default 120s) was reaped and executed again while still
+  running. Workers now heartbeat every `stuck_timeout / 3`.
+- Redis: every worker runs the stuck-job reaper, and the result of `ZREM` was
+  ignored, so two reapers could re-enqueue the same job and two workers would
+  run it at the same time. Only the reaper that removes the entry re-enqueues it.
+- Reaped jobs were never dead-lettered. A job that keeps killing its worker
+  (OOM, segfault) looped forever; Redis also decremented `attempt` on reap.
+  The dead worker's attempt now counts, and the job goes to the DLQ after
+  `max_attempts`.
+- A worker that resumed after a long pause could ack or nack a job that had
+  been reaped and re-claimed by another worker (Postgres didn't check job
+  status at all, so a stale retry could trigger a third execution).
+- Heartbeats only refresh jobs that are still running (Redis `ZADD XX`,
+  Postgres `status = 'running'`), so a late heartbeat can't resurrect a job.
+
+### Added
+- `Backend::ack_claim` / `Backend::nack_claim`: ack/nack fenced by the claim's
+  attempt number. Default implementations fall back to `ack`/`nack`, so custom
+  backends keep compiling. Built-in backends implement real fencing.
+
 ## [0.1.9] - 2026-09-27
 
 ### Fixed

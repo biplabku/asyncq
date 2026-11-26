@@ -9,9 +9,9 @@
 
 ```toml
 [dependencies]
-asyncq = "0.1"
-asyncq-redis = "0.1"   # Redis backend (recommended for production)
-# asyncq-postgres = "0.1"  # PostgreSQL backend — no Redis needed
+asyncq = "0.2"
+asyncq-redis = "0.2"   # Redis backend (recommended for production)
+# asyncq-postgres = "0.2"  # PostgreSQL backend — no Redis needed
 serde = { version = "1", features = ["derive"] }
 tokio = { version = "1", features = ["full"] }
 ```
@@ -339,7 +339,7 @@ async fn test_my_job() {
 `asyncq` ships with the `scheduler` feature enabled by default. To opt out of the `cron` dependency (e.g., serverless environments where you never use `Scheduler`):
 
 ```toml
-asyncq = { version = "0.1", default-features = false }
+asyncq = { version = "0.2", default-features = false }
 ```
 
 ## Roadmap
