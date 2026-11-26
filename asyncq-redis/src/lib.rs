@@ -64,20 +64,114 @@ const KEY_PROCESSING: &str = "asyncq:processing";
 
 // ── RedisBackend ──────────────────────────────────────────────────────────────
 
+/// Atomically take the next job: pop its id from the first non-empty pending list, bump its
+/// attempt, and register it in the processing set, all in one script. Doing these as separate
+/// commands lost the job if the worker died between the pop and the ZADD.
+/// KEYS[1] = processing set, KEYS[2..] = pending lists; ARGV[1] = now (unix s), ARGV[2] = job key prefix.
+const CLAIM_LUA: &str = r#"
+for i = 2, #KEYS do
+  while true do
+    local id = redis.call('RPOP', KEYS[i])
+    if not id then break end
+    local job = ARGV[2] .. id
+    if redis.call('EXISTS', job) == 1 then
+      redis.call('HINCRBY', job, 'attempt', 1)
+      redis.call('ZADD', KEYS[1], ARGV[1], id)
+      return id
+    end
+    -- job hash deleted after enqueue: drop the stale id and keep looking
+  end
+end
+return false
+"#;
+
+/// Upper bound on how long `claim` sleeps between polls while waiting for work.
+const CLAIM_POLL_INTERVAL: Duration = Duration::from_millis(100);
+
+/// Ack, optionally fenced by attempt. KEYS[1] processing, KEYS[2] job hash;
+/// ARGV[1] id, ARGV[2] attempt ('' = unfenced), ARGV[3] queue key prefix.
+/// Returns 1 if applied, 0 if the claim was lost.
+const ACK_LUA: &str = r#"
+if ARGV[2] ~= '' then
+  if redis.call('HGET', KEYS[2], 'attempt') ~= ARGV[2] then return 0 end
+  if redis.call('ZREM', KEYS[1], ARGV[1]) == 0 then return 0 end
+else
+  redis.call('ZREM', KEYS[1], ARGV[1])
+end
+local q = redis.call('HGET', KEYS[2], 'queue')
+redis.call('DEL', KEYS[2])
+if q then redis.call('INCR', ARGV[3] .. q .. ':completed') end
+return 1
+"#;
+
+/// Nack (retry later or dead-letter), optionally fenced by attempt.
+/// KEYS[1] processing, KEYS[2] job hash; ARGV[1] id, ARGV[2] attempt ('' = unfenced),
+/// ARGV[3] queue key prefix, ARGV[4] error, ARGV[5] retry_at unix s ('' = dead-letter), ARGV[6] now.
+/// Returns 1 applied, 0 claim lost, -1 job not found.
+const NACK_LUA: &str = r#"
+if ARGV[2] ~= '' then
+  if redis.call('HGET', KEYS[2], 'attempt') ~= ARGV[2] then return 0 end
+  if redis.call('ZREM', KEYS[1], ARGV[1]) == 0 then return 0 end
+else
+  redis.call('ZREM', KEYS[1], ARGV[1])
+end
+local q = redis.call('HGET', KEYS[2], 'queue')
+if not q then return -1 end
+redis.call('HSET', KEYS[2], 'last_error', ARGV[4])
+if ARGV[5] ~= '' then
+  redis.call('HSET', KEYS[2], 'scheduled_at', ARGV[5])
+  redis.call('ZADD', ARGV[3] .. q .. ':delayed', ARGV[5], ARGV[1])
+else
+  redis.call('ZADD', ARGV[3] .. q .. ':dead', ARGV[6], ARGV[1])
+end
+return 1
+"#;
+
+/// Re-enqueue (or dead-letter, if attempts are exhausted) every job whose heartbeat is older
+/// than the cutoff, in one script so a reaper that dies mid-sweep can't strand a job.
+/// KEYS[1] processing; ARGV[1] cutoff, ARGV[2] now, ARGV[3] job key prefix,
+/// ARGV[4] queue key prefix, ARGV[5] error for exhausted jobs. Returns the number reaped.
+const REAP_LUA: &str = r#"
+local ids = redis.call('ZRANGEBYSCORE', KEYS[1], '-inf', ARGV[1])
+local n = 0
+for _, id in ipairs(ids) do
+  redis.call('ZREM', KEYS[1], id)
+  n = n + 1
+  local job = ARGV[3] .. id
+  local q = redis.call('HGET', job, 'queue')
+  if q then
+    local attempt = tonumber(redis.call('HGET', job, 'attempt') or '0')
+    local max_attempts = tonumber(redis.call('HGET', job, 'max_attempts') or '0')
+    if attempt >= max_attempts then
+      redis.call('HSET', job, 'last_error', ARGV[5])
+      redis.call('ZADD', ARGV[4] .. q .. ':dead', ARGV[2], id)
+    else
+      redis.call('HSET', job, 'scheduled_at', ARGV[2])
+      redis.call('LPUSH', ARGV[4] .. q .. ':pending', id)
+    end
+  end
+end
+return n
+"#;
+
+/// Move due delayed jobs to pending. KEYS[1] delayed set, KEYS[2] pending list; ARGV[1] now.
+const PROMOTE_LUA: &str = r#"
+local ids = redis.call('ZRANGEBYSCORE', KEYS[1], '-inf', ARGV[1])
+for _, id in ipairs(ids) do
+  redis.call('ZREM', KEYS[1], id)
+  redis.call('LPUSH', KEYS[2], id)
+end
+return #ids
+"#;
+
+const JOB_PREFIX: &str = "asyncq:jobs:";
+const QUEUE_PREFIX: &str = "asyncq:q:";
+const REAPED_EXHAUSTED: &str = "worker stopped heartbeating; attempts exhausted";
+
 /// Redis backend for asyncq.
 ///
 /// Uses a connection manager for automatic reconnect and connection pooling.
 /// All operations are atomic via Redis commands and Lua scripts where needed.
-/// Atomically: if the job's attempt still matches and it is still in processing,
-/// remove it from processing (so no reaper can take it) and return 1.
-const TAKE_CLAIM_LUA: &str = r#"
-if redis.call('HGET', KEYS[2], 'attempt') == ARGV[2]
-   and redis.call('ZREM', KEYS[1], ARGV[1]) == 1 then
-  return 1
-end
-return 0
-"#;
-
 #[derive(Clone)]
 pub struct RedisBackend {
     conn: ConnectionManager,
@@ -86,20 +180,6 @@ pub struct RedisBackend {
 impl RedisBackend {
     /// Connect to Redis at `url` (e.g. `"redis://127.0.0.1/"` or
     /// `"redis://:password@host:6379/0"`).
-    /// Fence for ack/nack: succeeds for exactly one of {this worker, a reaper}.
-    async fn take_claim(&self, id: JobId, attempt: u32) -> Result<bool> {
-        let mut conn = self.conn.clone();
-        let won: i64 = redis::Script::new(TAKE_CLAIM_LUA)
-            .key(KEY_PROCESSING)
-            .key(key_job(id))
-            .arg(id.to_string())
-            .arg(attempt.to_string())
-            .invoke_async(&mut conn)
-            .await
-            .map_err(|e| Error::Backend(e.to_string()))?;
-        Ok(won == 1)
-    }
-
     pub async fn new(url: &str) -> Result<Self> {
         let client = Client::open(url)
             .map_err(|e| Error::Backend(e.to_string()))?;
@@ -167,30 +247,57 @@ impl RedisBackend {
         }))
     }
 
-    /// Move any delayed jobs whose run_at has passed into the pending list.
+    async fn run_ack(&self, id: JobId, attempt: Option<u32>) -> Result<bool> {
+        let mut conn = self.conn.clone();
+        let applied: i64 = redis::Script::new(ACK_LUA)
+            .key(KEY_PROCESSING)
+            .key(key_job(id))
+            .arg(id.to_string())
+            .arg(attempt.map(|a| a.to_string()).unwrap_or_default())
+            .arg(QUEUE_PREFIX)
+            .invoke_async(&mut conn)
+            .await
+            .map_err(|e| Error::Backend(e.to_string()))?;
+        Ok(applied == 1)
+    }
+
+    async fn run_nack(
+        &self,
+        id: JobId,
+        attempt: Option<u32>,
+        error: &str,
+        retry_at: Option<DateTime<Utc>>,
+    ) -> Result<bool> {
+        let mut conn = self.conn.clone();
+        let applied: i64 = redis::Script::new(NACK_LUA)
+            .key(KEY_PROCESSING)
+            .key(key_job(id))
+            .arg(id.to_string())
+            .arg(attempt.map(|a| a.to_string()).unwrap_or_default())
+            .arg(QUEUE_PREFIX)
+            .arg(error)
+            .arg(retry_at.map(|t| t.timestamp().to_string()).unwrap_or_default())
+            .arg(Utc::now().timestamp())
+            .invoke_async(&mut conn)
+            .await
+            .map_err(|e| Error::Backend(e.to_string()))?;
+        match applied {
+            -1 => Err(Error::NotFound(id.to_string())),
+            n => Ok(n == 1),
+        }
+    }
+
     async fn promote_delayed(&self, queues: &[&str]) -> Result<()> {
         let now = Utc::now().timestamp();
         let mut conn = self.conn.clone();
         for &queue in queues {
-            let delayed_key = key_delayed(queue);
-            let pending_key = key_pending(queue);
-            // Fetch all job IDs whose score (run_at) <= now
-            let ids: Vec<String> = conn
-                .zrangebyscore(&delayed_key, "-inf", now)
+            redis::Script::new(PROMOTE_LUA)
+                .key(key_delayed(queue))
+                .key(key_pending(queue))
+                .arg(now)
+                .invoke_async::<i64>(&mut conn)
                 .await
                 .map_err(|e| Error::Backend(e.to_string()))?;
-            for id in ids {
-                // Remove from delayed, push to pending
-                let removed: i64 = conn
-                    .zrem(&delayed_key, &id)
-                    .await
-                    .map_err(|e| Error::Backend(e.to_string()))?;
-                if removed > 0 {
-                    conn.lpush::<_, _, ()>(&pending_key, &id)
-                        .await
-                        .map_err(|e| Error::Backend(e.to_string()))?;
-                }
-            }
         }
         Ok(())
     }
@@ -228,137 +335,47 @@ impl Backend for RedisBackend {
 
         let pending_keys: Vec<String> = queues.iter().map(|q| key_pending(q)).collect();
         let mut conn = self.conn.clone();
+        let script = redis::Script::new(CLAIM_LUA);
+        let deadline = tokio::time::Instant::now() + timeout;
 
-        // When timeout is zero (used by run_once), use non-blocking RPOP to avoid
-        // BRPOP blocking forever (Redis treats timeout=0 as "block indefinitely").
-        let result: Option<(String, String)> = if timeout.is_zero() {
-            let mut found = None;
+        loop {
+            let mut call = script.prepare_invoke();
+            call.key(KEY_PROCESSING);
             for key in &pending_keys {
-                let val: Option<String> = conn.rpop(key, None)
-                    .await
-                    .map_err(|e| Error::Backend(e.to_string()))?;
-                if let Some(id_str) = val {
-                    found = Some((key.clone(), id_str));
-                    break;
-                }
+                call.key(key);
             }
-            found
-        } else {
-            // Blocking wait — BRPOP with real timeout
-            let timeout_secs = timeout.as_secs_f64().max(0.001);
-            redis::cmd("BRPOP")
-                .arg(&pending_keys)
-                .arg(timeout_secs)
-                .query_async(&mut conn)
+            let claimed: Option<String> = call
+                .arg(Utc::now().timestamp())
+                .arg(JOB_PREFIX)
+                .invoke_async(&mut conn)
                 .await
-                .map_err(|e| Error::Backend(e.to_string()))?
-        };
+                .map_err(|e| Error::Backend(e.to_string()))?;
 
-        let Some((_key, id_str)) = result else {
-            return Ok(None);
-        };
+            if let Some(id_str) = claimed {
+                let id = Uuid::parse_str(&id_str)
+                    .map_err(|e| Error::Backend(format!("invalid job id: {e}")))?;
+                // attempt was already incremented by the script
+                return self.load_job(id).await;
+            }
 
-        let id = Uuid::parse_str(&id_str)
-            .map_err(|e| Error::Backend(format!("invalid job id: {e}")))?;
-
-        let mut record = match self.load_job(id).await? {
-            Some(r) => r,
-            None => return Ok(None), // job was deleted between enqueue and claim
-        };
-
-        record.attempt += 1;
-
-        // Update attempt count and register in processing set
-        let now = Utc::now().timestamp();
-        let mut conn2 = self.conn.clone();
-        redis::cmd("HSET")
-            .arg(key_job(id))
-            .arg("attempt")
-            .arg(record.attempt)
-            .query_async::<()>(&mut conn2)
-            .await
-            .map_err(|e| Error::Backend(e.to_string()))?;
-
-        conn2.zadd::<_, _, _, ()>(KEY_PROCESSING, id.to_string(), now)
-            .await
-            .map_err(|e| Error::Backend(e.to_string()))?;
-
-        Ok(Some(record))
+            let now = tokio::time::Instant::now();
+            if timeout.is_zero() || now >= deadline {
+                return Ok(None);
+            }
+            tokio::time::sleep(CLAIM_POLL_INTERVAL.min(deadline - now)).await;
+        }
     }
 
     async fn ack(&self, id: JobId) -> Result<()> {
-        let mut conn = self.conn.clone();
-        // Read queue name before deleting the hash so we can increment the counter
-        let queue: Option<String> = conn.hget(key_job(id), "queue")
-            .await
-            .map_err(|e| Error::Backend(e.to_string()))?;
-        // Remove from processing and delete job hash
-        conn.zrem::<_, _, ()>(KEY_PROCESSING, id.to_string())
-            .await
-            .map_err(|e| Error::Backend(e.to_string()))?;
-        conn.del::<_, ()>(key_job(id))
-            .await
-            .map_err(|e| Error::Backend(e.to_string()))?;
-        // Increment per-queue completed counter
-        if let Some(q) = queue {
-            conn.incr::<_, _, ()>(key_completed(&q), 1_u64)
-                .await
-                .map_err(|e| Error::Backend(e.to_string()))?;
-        }
-        Ok(())
+        self.run_ack(id, None).await.map(|_| ())
     }
 
     async fn nack(&self, id: JobId, error: &str, retry_at: Option<DateTime<Utc>>) -> Result<()> {
-        let mut conn = self.conn.clone();
-        // Remove from processing
-        conn.zrem::<_, _, ()>(KEY_PROCESSING, id.to_string())
-            .await
-            .map_err(|e| Error::Backend(e.to_string()))?;
-
-        // Update error field
-        redis::cmd("HSET")
-            .arg(key_job(id))
-            .arg("last_error")
-            .arg(error)
-            .query_async::<()>(&mut conn)
-            .await
-            .map_err(|e| Error::Backend(e.to_string()))?;
-
-        match retry_at {
-            Some(at) => {
-                // Schedule for retry
-                let record = self.load_job(id).await?
-                    .ok_or_else(|| Error::NotFound(id.to_string()))?;
-                redis::cmd("HSET")
-                    .arg(key_job(id))
-                    .arg("scheduled_at")
-                    .arg(at.timestamp())
-                    .query_async::<()>(&mut conn)
-                    .await
-                    .map_err(|e| Error::Backend(e.to_string()))?;
-                // Add to delayed set
-                conn.zadd::<_, _, _, ()>(key_delayed(&record.queue), id.to_string(), at.timestamp())
-                    .await
-                    .map_err(|e| Error::Backend(e.to_string()))?;
-            }
-            None => {
-                // Dead-letter: add to dead set
-                let record = self.load_job(id).await?
-                    .ok_or_else(|| Error::NotFound(id.to_string()))?;
-                let now = Utc::now().timestamp();
-                conn.zadd::<_, _, _, ()>(key_dead(&record.queue), id.to_string(), now)
-                    .await
-                    .map_err(|e| Error::Backend(e.to_string()))?;
-            }
-        }
-        Ok(())
+        self.run_nack(id, None, error, retry_at).await.map(|_| ())
     }
 
     async fn ack_claim(&self, id: JobId, attempt: u32) -> Result<bool> {
-        if !self.take_claim(id, attempt).await? {
-            return Ok(false);
-        }
-        self.ack(id).await.map(|_| true)
+        self.run_ack(id, Some(attempt)).await
     }
 
     async fn nack_claim(
@@ -368,10 +385,7 @@ impl Backend for RedisBackend {
         error: &str,
         retry_at: Option<DateTime<Utc>>,
     ) -> Result<bool> {
-        if !self.take_claim(id, attempt).await? {
-            return Ok(false);
-        }
-        self.nack(id, error, retry_at).await.map(|_| true)
+        self.run_nack(id, Some(attempt), error, retry_at).await
     }
 
     async fn heartbeat(&self, id: JobId) -> Result<()> {
@@ -390,52 +404,19 @@ impl Backend for RedisBackend {
     }
 
     async fn reap_stuck(&self, older_than: Duration) -> Result<u64> {
-        let cutoff = Utc::now().timestamp() - older_than.as_secs() as i64;
+        let now = Utc::now().timestamp();
         let mut conn = self.conn.clone();
-        // Find jobs whose heartbeat is older than cutoff
-        let stuck_ids: Vec<String> = conn
-            .zrangebyscore(KEY_PROCESSING, "-inf", cutoff)
+        let reaped: i64 = redis::Script::new(REAP_LUA)
+            .key(KEY_PROCESSING)
+            .arg(now - older_than.as_secs() as i64)
+            .arg(now)
+            .arg(JOB_PREFIX)
+            .arg(QUEUE_PREFIX)
+            .arg(REAPED_EXHAUSTED)
+            .invoke_async(&mut conn)
             .await
             .map_err(|e| Error::Backend(e.to_string()))?;
-
-        let mut count = 0u64;
-        for id_str in stuck_ids {
-            let id = match Uuid::parse_str(&id_str) {
-                Ok(id) => id,
-                Err(_) => continue,
-            };
-            // Remove from processing. Every worker runs the reaper, so only the one
-            // whose ZREM actually removed the entry may re-enqueue; otherwise two
-            // reapers push the same job twice and it runs twice concurrently.
-            let removed: i64 = conn
-                .zrem(KEY_PROCESSING, &id_str)
-                .await
-                .map_err(|e| Error::Backend(e.to_string()))?;
-            if removed == 0 {
-                continue;
-            }
-            count += 1;
-
-            // The dead worker's attempt counts (previously it was subtracted, so a
-            // job that crashes its worker was retried forever and never dead-lettered).
-            if let Some(record) = self.load_job(id).await? {
-                if record.attempt >= record.max_attempts {
-                    self.nack(id, "worker stopped heartbeating; attempts exhausted", None).await?;
-                    continue;
-                }
-                let now_ts = Utc::now().timestamp();
-                redis::cmd("HSET")
-                    .arg(key_job(id))
-                    .arg("scheduled_at").arg(now_ts)
-                    .query_async::<()>(&mut conn)
-                    .await
-                    .map_err(|e| Error::Backend(e.to_string()))?;
-                conn.lpush::<_, _, ()>(key_pending(&record.queue), &id_str)
-                    .await
-                    .map_err(|e| Error::Backend(e.to_string()))?;
-            }
-        }
-        Ok(count)
+        Ok(reaped as u64)
     }
 
     async fn stats(&self, queue: &str) -> Result<QueueStats> {
